@@ -2,7 +2,7 @@
 
 Paths below are relative to the **plugin root**, two directories above `skills/morning-note`. Resolve that location from the skill file rather than assuming the plugin lives in the user's project.
 
-Use the Python runtime available in the current Codex environment. If the workspace has a prepared `.venv`, prefer its Python (`.venv/Scripts/python.exe` on Windows or `.venv/bin/python` on macOS/Linux). The collector needs `lxml`, `pypdf` and timezone data; the email composer uses the Python standard library. If collection dependencies are unavailable, continue research through the available public web tools rather than claiming a scan ran.
+The collector needs `lxml`, `pypdf` and timezone data; the email composer uses the Python standard library. `scripts/collect_news.py` checks for these packages and uses a working `.venv` in the workspace or plugin root before trying its own Python. If no working runtime exists, create the plugin-root `.venv`, install `collector/requirements.txt` into it, and rerun collection. A failed collector run is not a broad scan; do not present an empty draft as a completed edition. If installation or source access is blocked, report the exact gap and continue public-web research only if it can produce a properly sourced draft.
 
 ## Gather inputs
 

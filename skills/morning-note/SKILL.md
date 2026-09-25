@@ -20,6 +20,8 @@ Read [the operating guide](references/operating-guide.md) for collector commands
 
 Read the headline audit as well as selected candidates. Look for useful leads missed by simple keywords, names outside the list, corporate events, management statements, sector developments and important macro context. Use the available web search/browsing tools to supplement missing markets or sources. Public exchange/regulator announcements are useful broad inputs; a growing list of individually coded company scrapers is not the core discovery strategy.
 
+If the collector fails because its Python lacks dependencies, install `collector/requirements.txt` into a `.venv` in the workspace or plugin root and rerun it before drafting. Verify a real collection report and headline audit exist. If setup remains blocked, disclose the failed scan and any unperformed priority checks; treat a zero-item email as an incomplete test result, not a finished morning note.
+
 Be candid about the source universe actually checked. Current feeds and first-page lists are bounded snapshots. A successful headline request is not proof of full-article access or complete coverage of a publisher. Paywalled snippets are leads; seek an accessible primary document supporting the event. Do not infer the rest of a restricted story.
 
 ## Investigate and decide

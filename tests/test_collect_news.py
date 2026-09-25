@@ -19,7 +19,8 @@ class CollectorLauncherTests(unittest.TestCase):
     def invoke(self, workspace, *args, returncode=0):
         argv = [str(SCRIPT), "--workspace", str(workspace), *args]
         completed = subprocess.CompletedProcess([], returncode)
-        with patch.object(sys, "argv", argv), patch.object(collector.subprocess, "run", return_value=completed) as run:
+        with patch.object(sys, "argv", argv), patch.object(collector, "select_python", return_value=sys.executable), \
+             patch.object(collector.subprocess, "run", return_value=completed) as run:
             result = collector.main()
         run.assert_called_once()
         command = run.call_args.args[0]
@@ -98,6 +99,26 @@ class CollectorLauncherTests(unittest.TestCase):
     def test_collector_failure_code_is_returned_to_caller(self):
         with tempfile.TemporaryDirectory() as temp:
             self.invoke(Path(temp), returncode=2)
+
+    def test_workspace_environment_is_used_when_dependencies_are_present(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            python = workspace / ".venv" / "Scripts" / "python.exe"
+            python.parent.mkdir(parents=True)
+            python.touch()
+            with patch.object(collector.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+                self.assertEqual(collector.select_python(workspace), str(python))
+            self.assertEqual(run.call_args.args[0], [str(python), "-c", "import lxml, pypdf, tzdata"])
+
+    def test_missing_dependencies_stop_before_a_run_folder_is_created(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            argv = [str(SCRIPT), "--workspace", str(workspace)]
+            with patch.object(sys, "argv", argv), patch.object(collector.subprocess, "run", return_value=subprocess.CompletedProcess([], 1)) as run:
+                with self.assertRaisesRegex(ValueError, "No scan was started"):
+                    collector.main()
+            self.assertFalse((workspace / "morning-note-runs").exists())
+            self.assertGreaterEqual(run.call_count, 1)
 
 
 if __name__ == "__main__":

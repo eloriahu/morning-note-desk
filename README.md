@@ -30,6 +30,8 @@ python3 -m venv .venv
 
 The source scan needs internet access. Its final output points to a run directory under `morning-note-runs/`; read that run's `headline-audit.json` and `evidence.json`, including its per-source coverage report. The scan's own preview is raw collection output, not a researched morning email. Commands below use `python` for brevity; use the matching virtual-environment Python shown above.
 
+The launcher looks for a working `.venv` in the workspace or this plugin folder and checks `lxml`, `pypdf` and `tzdata` before starting a scan. If none is available, install `collector/requirements.txt` into the project's `.venv` and retry. A `--help` response is not a dependency or source-access check.
+
 The included `collector/watchlist.json` is empty. To add *your own local* priority list for extra company checks, keep it outside the repository and run:
 
 ```sh
