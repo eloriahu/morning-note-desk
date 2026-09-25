@@ -2,7 +2,7 @@
 
 Paths below are relative to the **plugin root**, two directories above `skills/morning-note`. Resolve that location from the skill file rather than assuming the plugin lives in the user's project.
 
-Use the Python runtime available in the current Codex environment. The collector needs `lxml`, `pypdf` and timezone data; the email composer uses the Python standard library. If collection dependencies are unavailable, continue research through the available public web tools rather than claiming a scan ran.
+Use the Python runtime available in the current Codex environment. If the workspace has a prepared `.venv`, prefer its Python (`.venv/Scripts/python.exe` on Windows or `.venv/bin/python` on macOS/Linux). The collector needs `lxml`, `pypdf` and timezone data; the email composer uses the Python standard library. If collection dependencies are unavailable, continue research through the available public web tools rather than claiming a scan ran.
 
 ## Gather inputs
 
