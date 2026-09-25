@@ -1,0 +1,4 @@
+interface:
+  display_name: "Morning Note Desk"
+  short_description: "Research broad market news and draft the morning email"
+  default_prompt: "Use $morning-note to research the last 24 hours across APAC and generate my morning email draft."

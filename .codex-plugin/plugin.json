@@ -1,0 +1,22 @@
+{
+  "name": "morning-note-desk",
+  "version": "0.1.0+codex.20260925003326",
+  "description": "Discover APAC market events, research new developments and generate a cited morning email draft.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Morning Note Desk",
+    "shortDescription": "Research the news, then draft the morning email.",
+    "longDescription": "Scans broad public news, investigates priority companies and new names, compares evidence, writes concise English updates and creates an editable email draft. Runs inside Codex when requested; sending is separate.",
+    "developerName": "Local developer",
+    "category": "Finance",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Generate my APAC morning email from the last 24 hours.",
+      "Find important new names beyond my priority list.",
+      "Turn this research pack into a morning email draft."
+    ]
+  }
+}

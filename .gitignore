@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+output/
+morning-note-runs/
+research/
+sources/
+private/
+*.eml
+house-style.json
+house-assets/
+.DS_Store
