@@ -7,9 +7,8 @@
     {
       "name": "morning-note-desk",
       "source": {
-        "source": "url",
-        "url": "https://github.com/eloriahu/morning-note-desk.git",
-        "ref": "main"
+        "source": "local",
+        "path": "./"
       },
       "policy": {
         "installation": "AVAILABLE",
