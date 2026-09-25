@@ -4,6 +4,17 @@ This project helps prepare an Asia-Pacific morning research email. It scans a bo
 
 The repository contains the portable Morning Note Desk plugin and a sanitized Windows double-click prototype in `standalone/`. Its Python collector and email composer also run outside Codex. The Codex-specific instructions in `skills/morning-note/` describe the research workflow; they are not an AI model built into the Python scripts. Claude can use the same scripts after reading [CLAUDE_HANDOVER.md](CLAUDE_HANDOVER.md).
 
+## Install for a colleague in Codex
+
+1. Give your colleague access to this private GitHub repository and ask them to accept the invitation. Their computer also needs Git access to the repository.
+2. In Codex's terminal, run `codex plugin marketplace add eloriahu/morning-note-desk`.
+3. Restart the ChatGPT desktop app. In its Plugins Directory, choose the **Morning Note Desk** marketplace and install **Morning Note Desk**.
+4. Start a new task and ask: “Use Morning Note Desk to draft today's APAC morning email for review.” The bundled priority list is empty; give the colleague a separate local priority file if you want company-by-company checks. The plugin does not send mail.
+
+If a ChatGPT workspace admin publishes the plugin to your workspace and grants your colleague's role access, the colleague can find it in the workspace Plugins Directory without adding this private marketplace. This test release has not been workspace-published.
+
+The separate Windows prototype is in [`standalone/`](standalone/). Its [`START HERE.md`](standalone/START%20HERE.md) explains the double-click setup; that prototype collects raw leads and excerpts, while the Codex workflow adds research and a formatted email draft.
+
 ## Quick start
 
 Use Python 3.11 or newer. From this repository's root on **Windows PowerShell**:

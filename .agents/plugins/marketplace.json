@@ -1,0 +1,21 @@
+{
+  "name": "morning-note-desk",
+  "interface": {
+    "displayName": "Morning Note Desk"
+  },
+  "plugins": [
+    {
+      "name": "morning-note-desk",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/eloriahu/morning-note-desk.git",
+        "ref": "main"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Finance"
+    }
+  ]
+}
