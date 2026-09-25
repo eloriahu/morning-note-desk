@@ -2,7 +2,7 @@
 
 This project helps prepare an Asia-Pacific morning research email. It scans a bounded set of public news feeds and latest-news pages, then uses a human or an AI assistant to investigate the leads, write sourced English updates, and produce an editable email draft. The draft is **never sent automatically**.
 
-The repository is the portable Morning Note Desk plugin. Its Python collector and email composer also run outside Codex. The Codex-specific instructions in `skills/morning-note/` describe the research workflow; they are not an AI model built into the Python scripts. Claude can use the same scripts after reading [CLAUDE_HANDOVER.md](CLAUDE_HANDOVER.md).
+The repository contains the portable Morning Note Desk plugin and a sanitized Windows double-click prototype in `standalone/`. Its Python collector and email composer also run outside Codex. The Codex-specific instructions in `skills/morning-note/` describe the research workflow; they are not an AI model built into the Python scripts. Claude can use the same scripts after reading [CLAUDE_HANDOVER.md](CLAUDE_HANDOVER.md).
 
 ## Quick start
 
@@ -48,6 +48,7 @@ The output contains `review.html`, `email.html`, `morning-note.txt`, an unsent `
 - `skills/morning-note/`: Codex research instructions, house-format specification, pack schema, and optional event/calendar research routing.
 - `.codex-plugin/plugin.json`: Codex plugin manifest.
 - `tests/`: portable helper and email layout tests.
+- `standalone/`: allowlisted Windows prototype with setup/launch scripts, collector tests and one public demo priority name. Its raw excerpt email is separate from the plugin's AI-researched draft.
 
 The current public collector config enables 11 sources: six Japanese publisher lists/feeds, four regional English news lists/feeds, and one public competition-authority news page. These are bounded recent listings, not complete site archives. Article access varies; some leads remain restricted, undated, or unavailable. Korea, India, many exchange announcements, paid newswires, and full issuer coverage remain gaps. Source availability and terms should be checked before expanding collection.
 
@@ -55,8 +56,9 @@ The current public collector config enables 11 sources: six Japanese publisher l
 
 ```sh
 python -m unittest discover -s tests -q
+cd standalone && python -m unittest discover -s tests -q
 ```
 
 The composer checks required fields, public-looking citation URLs, readable source status, and exact publication times inside the research window. It cannot prove that a claim is true, a ticker is correct, or a story is genuinely new. Those judgments belong in the research step and final review.
 
-The repository includes no original sample emails, private 32-name priority list, contacts, logo, credentials, previous editions, scheduled task, email account, or external model API integration. The user's original double-click app remains a separate local project; this repository includes its portable collector helper, not that private installation.
+The repository includes no original sample emails, private 32-name priority list, contacts, logo, credentials, previous editions, scheduled task, email account, or external model API integration. The user's original double-click app remains a separate local project; `standalone/` is a sanitized prototype, not that private installation. Its demo watchlist is versioned for reproduction; replace it only in a private local copy, and never commit your actual priority names.

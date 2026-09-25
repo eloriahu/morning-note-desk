@@ -1,0 +1,268 @@
+{
+  "title": "Morning Note — broad news scan (1 demo priority name)",
+  "timezone": "Asia/Singapore",
+  "lookback_hours": 24,
+  "max_stories": 25,
+  "request_timeout_seconds": 15,
+  "request_interval_seconds": 1.5,
+  "max_documents_per_source": 12,
+  "coverage_notes": [
+    "Broad discovery covers companies beyond the list. This share copy includes only one demo priority name and excludes your private list.",
+    "Broad market discovery runs first. A company does not need to be in the priority list to become a research lead.",
+    "Every scanned market headline is retained in headline-audit.json. Keyword scores are only a first-pass ordering; AI research may promote overlooked items.",
+    "The collector checks the strongest leads within a per-source article limit. Unread, restricted, undated and unidentified leads remain visible for review.",
+    "The Codex plugin researches, translates and writes supported English summaries before passing them to the email formatter. The standalone collector does not perform AI analysis.",
+    "Publisher feeds and current headline pages have finite depth. This does not cover every major news website, every article or the full 24-hour archive.",
+    "Brave API search is optional and disabled. Full exchange feeds, paid news access, market-data calculations and email sending are not connected."
+  ],
+  "discovery_mode": "market_first",
+  "min_attention_score": 35,
+  "sources": [
+    {
+      "id": "softbank-press",
+      "name": "SoftBank Group — official press releases",
+      "kind": "feed",
+      "url": "https://group.softbank/en/news/press/index.rdf",
+      "enabled": true,
+      "tickers": [
+        "9984 JP"
+      ],
+      "category": "Relative Value",
+      "timezone": "Asia/Tokyo",
+      "language": "en",
+      "issuer_official": true,
+      "allowed_domains": [
+        "group.softbank"
+      ],
+      "coverage_note": "Official company press feed; linked public release text is checked before drafting.",
+      "collection_role": "priority"
+    },
+    {
+      "id": "cade-news",
+      "name": "CADE — public news",
+      "kind": "html_index",
+      "url": "https://www.gov.br/cade/pt-br/assuntos/noticias",
+      "link_xpath": "//h2[contains(@class, 'titulo')]/a[@href]",
+      "enabled": true,
+      "tickers": [],
+      "category": "Merger Arbitrage",
+      "timezone": "America/Sao_Paulo",
+      "language": "pt",
+      "collection_role": "market"
+    },
+    {
+      "enabled": true,
+      "publisher": true,
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "encoding": "utf-8",
+      "tickers": [],
+      "id": "nikkei-latest",
+      "name": "Nikkei — public latest headlines",
+      "kind": "publisher_index",
+      "url": "https://www.nikkei.com/news/category/",
+      "allowed_domains": [
+        "nikkei.com"
+      ],
+      "item_xpath": "//article[.//time[@datetime] and .//h2/a[contains(@href,'/article/')]]",
+      "item_link_xpath": ".//h2/a[contains(@href,'/article/')]",
+      "date_xpath": ".//time/@datetime",
+      "coverage_note": "Latest public list only; matching article access and original publication time are checked separately. No archive-wide keyword search.",
+      "collection_role": "market"
+    },
+    {
+      "enabled": true,
+      "publisher": true,
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "encoding": "utf-8",
+      "tickers": [],
+      "id": "yomiuri-latest",
+      "name": "Yomiuri — public latest headlines",
+      "kind": "publisher_index",
+      "url": "https://www.yomiuri.co.jp/news/",
+      "allowed_domains": [
+        "yomiuri.co.jp"
+      ],
+      "item_xpath": "//*[@id='latest_list_news']/article",
+      "item_link_xpath": ".//h3/a[@href]",
+      "date_xpath": ".//time/@datetime",
+      "coverage_note": "Latest public list only, with publisher timestamps interpreted in Japan time.",
+      "collection_role": "market"
+    },
+    {
+      "enabled": true,
+      "publisher": true,
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "encoding": "utf-8",
+      "tickers": [],
+      "id": "asahi-latest",
+      "name": "Asahi — public latest headlines",
+      "kind": "publisher_index",
+      "url": "https://www.asahi.com/news/",
+      "allowed_domains": [
+        "asahi.com"
+      ],
+      "link_xpath": "//div[@id='Headlines-List']//li/a[contains(@href,'/articles/')]",
+      "coverage_note": "Index time-of-day alone is not a publication date. Matching articles need an independently parseable date or remain held.",
+      "collection_role": "market"
+    },
+    {
+      "enabled": true,
+      "publisher": true,
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "encoding": "utf-8",
+      "tickers": [],
+      "id": "mainichi-rss",
+      "name": "Mainichi — official latest-news feed",
+      "kind": "feed",
+      "url": "https://mainichi.jp/rss/etc/mainichi-flash.rss",
+      "allowed_domains": [
+        "mainichi.jp"
+      ],
+      "coverage_note": "Publisher feed currently exposes 20 latest headlines, not a complete 24-hour archive.",
+      "collection_role": "market"
+    },
+    {
+      "enabled": true,
+      "publisher": true,
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "encoding": "utf-8",
+      "tickers": [],
+      "id": "sentaku-latest",
+      "name": "Sentaku — public issue headlines",
+      "kind": "publisher_index",
+      "url": "https://www.sentaku.co.jp/",
+      "allowed_domains": [
+        "sentaku.co.jp"
+      ],
+      "link_xpath": "//a[contains(@href,'/articles/view/') and normalize-space(.)]",
+      "coverage_note": "Monthly publication. An issue month cannot establish a 12/24-hour publication time; such matches remain review leads.",
+      "collection_role": "market"
+    },
+    {
+      "enabled": true,
+      "publisher": true,
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "encoding": "utf-8",
+      "tickers": [],
+      "id": "diamond-rss",
+      "name": "Diamond — official latest feed",
+      "kind": "feed",
+      "url": "https://diamond.jp/list/feed/rss/dol",
+      "allowed_domains": [
+        "diamond.jp"
+      ],
+      "coverage_note": "Publisher feed currently exposes 25 latest items. Restricted bodies are not read; metadata stays in the review queue.",
+      "collection_role": "market"
+    },
+    {
+      "id": "brave-publisher-search",
+      "name": "Search across the six Japanese publishers — optional Brave API",
+      "kind": "brave_search",
+      "enabled": false,
+      "url": "https://api.search.brave.com/res/v1/web/search",
+      "scope_market": "JP",
+      "language": "ja",
+      "timezone": "Asia/Tokyo",
+      "allowed_domains": [
+        "nikkei.com",
+        "yomiuri.co.jp",
+        "asahi.com",
+        "mainichi.jp",
+        "sentaku.co.jp",
+        "diamond.jp"
+      ],
+      "max_queries": 12,
+      "count": 10,
+      "request_interval_seconds": 1.5,
+      "request_timeout_seconds": 15,
+      "disabled_reason": "Optional: use existing Brave access through BRAVE_SEARCH_API_KEY and run with --with-search. No account or subscription is required for normal public-source scans.",
+      "collection_role": "priority"
+    },
+    {
+      "id": "rthk-finance-rss",
+      "name": "RTHK — English finance news",
+      "kind": "feed",
+      "url": "https://rthk.hk/rthk/news/rss/e_expressnews_efinance.xml",
+      "enabled": true,
+      "publisher": true,
+      "collection_role": "market",
+      "timezone": "Asia/Hong_Kong",
+      "language": "en",
+      "encoding": "utf-8",
+      "tickers": [],
+      "allowed_domains": [
+        "rthk.hk"
+      ],
+      "coverage_note": "20 recent English finance items observed. Hong Kong and regional finance; finite feed depth, not complete market coverage. Feed pubDate has an explicit +0800 offset; linked article access is checked."
+    },
+    {
+      "id": "scmp-business-rss",
+      "name": "South China Morning Post — business headlines",
+      "kind": "feed",
+      "url": "https://www.scmp.com/rss/92/feed",
+      "enabled": true,
+      "publisher": true,
+      "collection_role": "market",
+      "timezone": "Asia/Hong_Kong",
+      "language": "en",
+      "encoding": "utf-8",
+      "tickers": [],
+      "allowed_domains": [
+        "scmp.com"
+      ],
+      "coverage_note": "50 recent business items observed, including companies across Asia. Feed timestamps carry explicit offsets. Restricted article bodies remain review leads; no subscription access or archive-wide search is connected."
+    },
+    {
+      "id": "abc-business-index",
+      "name": "ABC Australia — business headlines",
+      "kind": "publisher_index",
+      "url": "https://www.abc.net.au/news/business",
+      "enabled": true,
+      "publisher": true,
+      "collection_role": "market",
+      "timezone": "Australia/Sydney",
+      "language": "en",
+      "encoding": "utf-8",
+      "tickers": [],
+      "allowed_domains": [
+        "abc.net.au"
+      ],
+      "item_xpath": "//article[.//h3/a[starts-with(@href,'/news/')]]",
+      "item_link_xpath": ".//h3/a[starts-with(@href,'/news/')]",
+      "date_xpath": ".//time[@datetime]/@datetime",
+      "coverage_note": "Public business homepage cards only. Timestamped cards carry UTC datetimes; undated cards require original publication metadata from the article. Features can be old and live blogs can change after initial publication. ABC discontinued updating RSS feeds; this uses the current HTML page."
+    },
+    {
+      "id": "focus-taiwan-rss",
+      "name": "Focus Taiwan — official English news feed",
+      "kind": "feed",
+      "url": "https://feeds.feedburner.com/rsscna/engnews/",
+      "enabled": true,
+      "publisher": true,
+      "collection_role": "market",
+      "timezone": "Asia/Taipei",
+      "language": "en",
+      "encoding": "utf-8",
+      "tickers": [],
+      "allowed_domains": [
+        "focustaiwan.tw"
+      ],
+      "coverage_note": "52 recent English items observed in the official site-advertised FeedBurner feed. Includes non-business stories, which need event relevance screening. Original feed dates include +0800; article publication and update timestamps remain distinct. Not a complete Taiwan news archive."
+    }
+  ],
+  "watchlist_file": "watchlist.json",
+  "inbox_file": "inbox.json",
+  "topic": ""
+}
