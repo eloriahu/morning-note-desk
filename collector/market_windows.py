@@ -14,17 +14,30 @@ DEFAULT_CLOSES = {
     'HK': {'timezone': 'Asia/Hong_Kong', 'close': '16:10'},
     'CH': {'timezone': 'Asia/Shanghai', 'close': '15:00'},
     'TT': {'timezone': 'Asia/Taipei', 'close': '13:30'},
-    'NZ': {'timezone': 'Pacific/Auckland', 'close': '16:45'},
+    'NZ': {'timezone': 'Pacific/Auckland', 'close': '17:00:30'},
     'SP': {'timezone': 'Asia/Singapore', 'close': '17:16'},
     'IN': {'timezone': 'Asia/Kolkata', 'close': '15:30'},
     'MK': {'timezone': 'Asia/Kuala_Lumpur', 'close': '17:00'},
+    'IJ': {'timezone': 'Asia/Jakarta', 'close': '16:15'},
+    'TB': {'timezone': 'Asia/Bangkok', 'close': '16:40'},
+    'PM': {'timezone': 'Asia/Manila', 'close': '15:15'},
+    'VN': {'timezone': 'Asia/Ho_Chi_Minh', 'close': '15:00'},
 }
-ALIASES = {'CN': 'CH', 'TW': 'TT', 'SG': 'SP', 'MY': 'MK', 'KS': 'KR', 'KQ': 'KR'}
+ALIASES = {'CN': 'CH', 'TW': 'TT', 'SG': 'SP', 'MY': 'MK', 'KS': 'KR', 'KQ': 'KR',
+           'ID': 'IJ', 'TH': 'TB', 'PH': 'PM'}
 
 
 def market_code(value):
     code = str(value or '').strip().upper()
     return ALIASES.get(code, code)
+
+
+def ticker_market(value):
+    """Read the market suffix of a verified ticker, including Bloomberg Equity IDs."""
+    parts = value.split() if isinstance(value, str) else []
+    if parts and parts[-1].upper() == 'EQUITY':
+        parts.pop()
+    return market_code(parts[-1]) if len(parts) >= 2 else ''
 
 
 def latest_close(asof, rule):
@@ -76,11 +89,14 @@ def infer_markets(record, source, matched_tickers=()):
     if explicit:
         return [market_code(explicit)]
     tickers = record.get('exchange_tickers') or record.get('tickers') or list(matched_tickers) or source.get('tickers', [])
-    markets = sorted({market_code(t.split()[-1]) for t in tickers if isinstance(t, str) and t.split()})
+    markets = sorted({ticker_market(t) for t in tickers if ticker_market(t)})
     if markets:
         return markets
-    hint = source.get('scope_market') or source.get('timing_market')
-    return [market_code(hint)] if hint else []
+    # A publisher's country does not establish the listing of an unknown issuer.
+    if source.get('kind') == 'exchange_index' or source.get('issuer_official'):
+        hint = source.get('scope_market') or source.get('timing_market')
+        return [market_code(hint)] if hint else []
+    return []
 
 
 def record_window(record, source, fallback, matched_tickers=()):

@@ -11,11 +11,12 @@ def _text(value):
 
 def _applies(source, ticker):
     """Respect both configured issuer restrictions and the run's actual scope."""
+    from market_windows import market_code, ticker_market
     if source.get("tickers") and ticker not in source["tickers"]:
         return False
     if "scope_tickers" in source and ticker not in source["scope_tickers"]:
         return False
-    if source.get("scope_market") and not ticker.endswith(" " + source["scope_market"]):
+    if source.get("scope_market") and ticker_market(ticker) != market_code(source["scope_market"]):
         return False
     return True
 

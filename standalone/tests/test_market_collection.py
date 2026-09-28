@@ -94,6 +94,31 @@ class MarketCollectionTests(unittest.TestCase):
         self.assertEqual(audit, [])
         self.assertEqual(fake.get.call_count, 1)
 
+    def test_publisher_location_does_not_hide_other_market_company(self):
+        self.asof = datetime.fromisoformat('2026-09-28T16:00:00+08:00')
+        title = 'PriorityCo announces acquisition of Horizon'
+        feed = self.feed(title).replace(b'Thu, 24 Sep 2026 08:00:00 +0900', b'Mon, 28 Sep 2026 14:20:00 +0800')
+        article = self.article(title).replace(b'2026-09-24T08:00:00+09:00', b'2026-09-28T14:20:00+08:00')
+        records, coverage, audit, _ = self.collect(
+            {self.source['url']: feed, 'https://example.jp/0': article},
+            watch=[dict(ticker='TEST AU', name='PriorityCo', aliases=[])],
+            config=dict(self.config, timing_mode='market_close', timezone='Asia/Singapore'))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(coverage[0]['scope_tickers'], ['TEST AU'])
+        self.assertEqual(audit[0]['timing_markets'], ['AU'])
+        self.assertEqual(records[0]['applied_window_start'], '2026-09-28T14:15:00+08:00')
+        self.assertTrue(records[0]['eligible'])
+
+    def test_authoritative_source_scope_understands_country_alias(self):
+        source = dict(self.source, publisher=False, issuer_official=True, scope_market='TW')
+        watch = [dict(ticker='TEST TT Equity', name='PriorityCo', aliases=[])]
+        config = dict(self.config, sources=[source], selected_watchlist=watch)
+        _, coverage, _, fake = self.collect({source['url']: self.feed()}, watch=watch, config=config)
+        self.assertEqual(coverage[0]['scope_tickers'], ['TEST TT Equity'])
+        self.assertEqual(fake.get.call_count, 1)
+        payload = note.export_payload([], coverage, config, self.asof)
+        self.assertEqual(payload['watchlist_results'][0]['status'], 'no_new_items_in_checked_sources')
+
     def test_html_index_collects_unknown_names_and_retains_nonfinancial_audit(self):
         source = dict(self.source, kind='html_index', publisher=False, link_xpath='//a[@href]')
         title = 'NewCo announces merger with Horizon'

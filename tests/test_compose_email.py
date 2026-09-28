@@ -1,4 +1,5 @@
 import copy
+from datetime import datetime, timedelta
 import base64
 from email import policy
 from email.parser import BytesParser
@@ -60,6 +61,29 @@ class ComposerTests(unittest.TestCase):
         pack.pop('market_windows')
         with self.assertRaises(ValueError):
             composer.validate_pack(pack)
+
+    def test_every_market_enforces_its_own_source_timestamp(self):
+        # Independently specified desk cutoffs ensure a wide regional envelope
+        # never admits an older company story for any configured market.
+        expected = {'JP': '14:30:00', 'KR': '14:30:00', 'AU': '14:15:00',
+                    'HK': '16:10:00', 'CH': '15:00:00', 'TT': '13:30:00',
+                    'NZ': '12:00:30', 'SP': '17:16:00', 'IN': '18:00:00',
+                    'MK': '17:00:00', 'IJ': '17:15:00', 'TB': '17:40:00',
+                    'PM': '15:15:00', 'VN': '16:00:00'}
+        asof = datetime.fromisoformat('2026-09-29T19:00:00+08:00')
+        windows, start = composer.windows.build_windows(dict(timing_mode='market_close'), asof)
+        self.assertEqual(set(windows) - {'GLOBAL'}, set(expected))
+        for market, clock in expected.items():
+            for seconds, ready in [(-1, 0), (0, 1), (1, 1)]:
+                with self.subTest(market=market, seconds=seconds):
+                    pack = example_pack()
+                    pack.update(timing_mode='market_close', market_windows=windows,
+                                window_start=start.isoformat(), as_of=asof.isoformat())
+                    story = pack['stories'][0]
+                    story['tickers'] = [f'TEST {market} Equity']
+                    cutoff = datetime.fromisoformat(f'2026-09-29T{clock}+08:00')
+                    story['sources'][0]['published_at'] = (cutoff + timedelta(seconds=seconds)).isoformat()
+                    self.assertEqual(composer.validate_pack(pack)['composition']['ready_count'], ready)
 
     def test_ready_sourced_story_becomes_unsent_eml_without_recipients(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -31,7 +31,7 @@ No private example emails, screenshots, original research watchlist, prior draft
 
 This is a working prototype, not a complete APAC research service. It generates source headlines and short excerpts for review. It does not yet provide full English summaries, translation, reliable fact-level novelty detection or deal calculations. A new document can repeat old facts. Body-only company mentions can be missed by headline discovery. Restricted content is not unlocked, and failed sources are reported. No matches in these limited sources does not establish that there is no news. There may be no eligible demo items on a given day.
 
-The default starts at each market's latest completed desk close. On normal weekdays, Japan/Korea use 14:30 SGT and Australia 14:15 SGT. Monday morning includes Friday evening and the weekend; after a market closes on Monday the start moves to Monday. Check holidays and shortened sessions in the market timing guide. Explicit `--hours` selects a rolling window. There is no installed scheduler. Normal runs read the configured public sources; setup downloads Python dependencies.
+The default starts at each market's latest completed desk close. The rule applies to Japan, Korea, Australia, Hong Kong, mainland China, Taiwan, New Zealand, Singapore, India, Malaysia, Indonesia, Thailand, the Philippines and Vietnam. Monday morning includes Friday evening and the weekend; after a market closes on Monday the start moves to Monday. Check holidays and shortened sessions in the market timing guide. Explicit `--hours` selects a rolling window. There is no installed scheduler. Normal runs read the configured public sources; setup downloads Python dependencies.
 
 ## Optional broader publisher search
 

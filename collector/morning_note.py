@@ -519,7 +519,7 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
 
 
 def collect(config, watchlist, inbox, asof, prior, discovery_log=None):
-    from market_windows import build_windows
+    from market_windows import build_windows, market_code, ticker_market
     fetcher = Fetcher(config)
     market_windows, start = build_windows(config, asof)
     config.update(market_windows=market_windows, window_start=start.isoformat())
@@ -545,7 +545,9 @@ def collect(config, watchlist, inbox, asof, prior, discovery_log=None):
             report["errors"].append(source.get("disabled_reason", "Not enabled"))
             coverage.append(report)
             continue
-        source_watchlist = [w for w in watchlist if w['ticker'].endswith(' ' + source['scope_market'])] if source.get('scope_market') else watchlist
+        source_watchlist = watchlist
+        if source.get('scope_market') and (source.get('kind') == 'exchange_index' or source.get('issuer_official')):
+            source_watchlist = [w for w in watchlist if ticker_market(w['ticker']) == market_code(source['scope_market'])]
         if source.get('tickers') and (source.get('issuer_official') or source.get('collection_role') == 'priority'):
             source_watchlist = [w for w in source_watchlist if w['ticker'] in source['tickers']]
         if not source_watchlist and not source['broad_discovery']:
@@ -797,13 +799,13 @@ def publication_label(record):
 
 def export_payload(records, coverage, config, asof):
     """Proposed integration contract, not a known internal publishing platform API schema."""
+    from coverage_view import _applies
     tickers = config.get("selected_watchlist", [])
     by_ticker = []
     for company in tickers:
         matched = [r for r in records if company['ticker'] in r['tickers']]
         connected = [c for c in coverage if c['status'] == 'ok'
-                     and (not c.get('tickers') or company['ticker'] in c['tickers'])
-                     and (not c.get('scope_tickers') or company['ticker'] in c['scope_tickers'])
+                     and _applies(c, company['ticker'])
                      and ('successful_tickers' not in c or company['ticker'] in c['successful_tickers'])]
         if matched:
             status = "candidates_need_review"
