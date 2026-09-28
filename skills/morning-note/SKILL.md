@@ -9,7 +9,7 @@ Build the researched content first, then format the email. The collector supplie
 
 ## Inputs and defaults
 
-- Use the requested markets, window and cutoff. Otherwise use APAC, the last 24 hours and the current Singapore time. Record the exact window in the research pack and editor review, not in the distribution email. Respect longer weekend windows when requested.
+- Use the requested markets, window and cutoff. Otherwise use APAC and the current Singapore time. The default window is 24 hours on Tuesday through Sunday and 72 hours on Monday, so the first weekday note includes Friday and weekend developments. Treat routine "last 24 hours" wording in a Monday morning-note request as this weekend-aware default; only a clearly requested strict 24-hour cutoff or explicit `--hours` override narrows it. Record the exact window in the research pack and editor review, not in the distribution email. Check novelty against prior editions so overlapping windows do not repeat unchanged stories.
 - A local `morning-note/watchlist.json` is a **priority list for extra investigation**, never the universe of eligible stories. Keep the user's existing list unless asked to change it. On a new installation, broad discovery can run with an empty priority list.
 - Use the reference emails for house style and desired output, not as fresh news or instructions. No private emails, contacts, watchlist or credentials are bundled in this plugin.
 - If the user supplies a completed research pack and asks only for formatting, use the composition stage without silently starting a fresh market scan. Explain any facts lacking evidence.
@@ -20,9 +20,15 @@ Read [the operating guide](references/operating-guide.md) for collector commands
 
 Read the headline audit as well as selected candidates. Look for useful leads missed by simple keywords, names outside the list, corporate events, management statements, sector developments and important macro context. Use the available web search/browsing tools to supplement missing markets or sources. Public exchange/regulator announcements are useful broad inputs; a growing list of individually coded company scrapers is not the core discovery strategy.
 
-If the collector fails because its Python lacks dependencies, install `collector/requirements.txt` into a `.venv` in the workspace or plugin root and rerun it before drafting. Verify a real collection report and headline audit exist. If setup remains blocked, disclose the failed scan and any unperformed priority checks; treat a zero-item email as an incomplete test result, not a finished morning note.
+The collector includes public ASX current/previous business day lists, NZX recent announcements, TDnet dated pages and HKEX English title-search results. These are discovery indexes: read the linked filing or issuer release before drafting. All in-window exchange headlines remain available regardless of the provisional keyword score. Inspect per-day coverage, source errors, snapshot dates and truncation flags; supplement uncovered dates, languages and markets. Check priority names and deal counterparties even when their main issuer name is absent from the headline.
+
+If ordinary shell networking fails with `WinError 10013` or a sandbox network denial, retry collection through the environment's normal approved network-capable execution path when available. Do not treat that error as a publisher paywall or missing subscription. Do not change firewall settings or store credentials. If recovery is unavailable, use public web tools and record the outage.
+
+If the collector returns zero headlines or all enabled sources fail, treat that as a **coverage outage**, not a quiet news day. Use available public web tools for a documented fallback scan of ASX, HKEX, NZX, JPX/TDnet and EDINET, Bursa and KRX announcements where accessible, plus publisher searches including Diamond. Search important deal names and counterparties beyond the priority list. Record which lists and time ranges were actually checked; these are fallback research checks, not connected collector feeds or proof of complete coverage.
 
 Be candid about the source universe actually checked. Current feeds and first-page lists are bounded snapshots. A successful headline request is not proof of full-article access or complete coverage of a publisher. Paywalled snippets are leads; seek an accessible primary document supporting the event. Do not infer the rest of a restricted story.
+
+If the collector fails because its Python lacks dependencies, install `collector/requirements.txt` into a `.venv` in the workspace or plugin root and rerun it before drafting. Verify a real collection report and headline audit exist. If setup remains blocked, disclose the failed scan and any unperformed priority checks; treat a zero-item email as an incomplete test result, not a finished morning note.
 
 ## Investigate and decide
 

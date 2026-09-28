@@ -9,12 +9,18 @@ The collector needs `lxml`, `pypdf` and timezone data; the email composer uses t
 From the current working workspace:
 
 ```text
-python <plugin-root>/scripts/collect_news.py --workspace <workspace> --hours 24
+python <plugin-root>/scripts/collect_news.py --workspace <workspace>
 ```
 
-The helper first looks for a compatible local `morning-note` project (or a current directory containing its `morning_note.py` and `config.json`). This preserves that project's configured priority list and sources. Otherwise it uses the bundled broad-source collector and an empty priority list in a new workspace run folder. Optional `--priority-file <path>` supplies a local JSON priority list to the bundled run. Optional `--as-of <ISO timestamp with offset>` sets a cutoff. No API credentials are required for the public-source scan.
+The helper first looks for a compatible local `morning-note` project (or a current directory containing its `morning_note.py` and `config.json`). This preserves that project's configured priority list and sources. Otherwise it uses the bundled broad-source collector and an empty priority list in a new workspace run folder. With no `--hours`, the collector uses 72 hours on Monday and 24 hours on other days in the configured Singapore timezone. Explicit `--hours 12|24|48|72|96` overrides the day default. Optional `--priority-file <path>` supplies a local JSON priority list to the bundled run. Optional `--as-of <ISO timestamp with offset>` sets a cutoff. No API credentials are required for the public-source scan.
 
 Read the printed output directory's `evidence.json`, `headline-audit.json`, and collection report. Search tools in the current Codex task can supplement this raw material and perform priority-name checks. There is no need to obtain a Brave API key to do AI research in the task; the standalone collector's optional Brave connector remains disabled unless explicitly configured.
+
+If collection fails with `WinError 10013` or an explicit sandbox network denial, use the environment's approved network-capable execution path to retry the same public-source command. Do not disable security controls. If that path is unavailable, use the task's public web tools and record the outage.
+
+The bundled collector now checks ASX current and previous business day announcement lists, the latest NZX list, dated TDnet pages with pagination, and HKEX English title search by date. These yield discovery metadata only. Read source documents before writing factual bullets. Inspect `day_coverage`, `snapshot_dates`, `truncated`, source errors and the full headline audit. ASX/NZX snapshots cannot guarantee historical or holiday coverage; HKEX has a 1,000-row daily cap and TDnet a 20-page daily cap. Missing pages and truncated dates require supplemental research.
+
+If the headline audit is empty because sources failed, label it as a coverage outage and perform a separate public-web fallback scan. Also supplement incomplete markets with accessible EDINET, Bursa and KRX announcements, and publisher searches including Diamond. Record the actual lists, dates and failures. Inaccessible articles remain leads until a readable source supports the facts.
 
 The collector's automatically assembled headline/excerpt email is **not the finished AI-researched email**. Produce a separate researched pack and pass it to the composer.
 

@@ -65,7 +65,7 @@ class CollectorLauncherTests(unittest.TestCase):
             self.assertEqual(json.loads(config_path.read_text(encoding="utf-8")), expected)
             self.assertEqual(json.loads((config_path.parent / "watchlist.json").read_text(encoding="utf-8")), [])
             self.assertEqual(json.loads((config_path.parent / "inbox.json").read_text(encoding="utf-8")), [])
-            self.assertEqual(command[command.index("--hours") + 1], "24")
+            self.assertNotIn("--hours", command)
             self.assertNotIn("--as-of", command)
 
     def test_explicit_priority_file_is_copied_without_changing_local_list(self):

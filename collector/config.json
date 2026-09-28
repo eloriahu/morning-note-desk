@@ -2,6 +2,7 @@
   "title": "Morning Note Asia-Pacific",
   "timezone": "Asia/Singapore",
   "lookback_hours": 24,
+  "monday_lookback_hours": 72,
   "discovery_mode": "market_first",
   "topic": "",
   "max_stories": 25,
@@ -262,6 +263,101 @@
       ],
       "disabled_reason": "Feed works, but the official RSS page expressly limits this service to personal, non-commercial use. Work-desk usage rights have not been established; left optional.",
       "coverage_note": "20 recent business headlines observed. Article reuse and commercial feed use are not established by public accessibility."
+    },
+    {
+      "kind": "exchange_index",
+      "enabled": true,
+      "collection_role": "market",
+      "discovery_only": true,
+      "retain_all_leads": true,
+      "tickers": [],
+      "id": "asx-today",
+      "name": "ASX — today announcements",
+      "exchange_adapter": "asx",
+      "url": "https://www.asx.com.au/asx/v2/statistics/todayAnns.do",
+      "scope_market": "AU",
+      "timezone": "Australia/Sydney",
+      "language": "en",
+      "allowed_domains": [
+        "asx.com.au"
+      ],
+      "coverage_note": "Current ASX day snapshot; paired with the previous business day. Linked filings require review."
+    },
+    {
+      "kind": "exchange_index",
+      "enabled": true,
+      "collection_role": "market",
+      "discovery_only": true,
+      "retain_all_leads": true,
+      "tickers": [],
+      "id": "asx-previous",
+      "name": "ASX — previous business day announcements",
+      "exchange_adapter": "asx",
+      "url": "https://www.asx.com.au/asx/v2/statistics/prevBusDayAnns.do",
+      "scope_market": "AU",
+      "timezone": "Australia/Sydney",
+      "language": "en",
+      "allowed_domains": [
+        "asx.com.au"
+      ],
+      "coverage_note": "Previous business day snapshot including Friday on a normal Monday. Holidays and historical runs need an archive check."
+    },
+    {
+      "kind": "exchange_index",
+      "enabled": true,
+      "collection_role": "market",
+      "discovery_only": true,
+      "retain_all_leads": true,
+      "tickers": [],
+      "id": "nzx-announcements",
+      "name": "NZX — public announcements",
+      "exchange_adapter": "nzx",
+      "url": "https://announcements.nzx.com/",
+      "scope_market": "NZ",
+      "timezone": "Pacific/Auckland",
+      "language": "en",
+      "allowed_domains": [
+        "nzx.com"
+      ],
+      "coverage_note": "Latest 200 announcements; reports a gap when the oldest row does not reach the window start."
+    },
+    {
+      "kind": "exchange_index",
+      "enabled": true,
+      "collection_role": "market",
+      "discovery_only": true,
+      "retain_all_leads": true,
+      "tickers": [],
+      "id": "tdnet-announcements",
+      "name": "TDnet — daily company disclosures",
+      "exchange_adapter": "tdnet",
+      "url": "https://www.release.tdnet.info/inbs/",
+      "scope_market": "JP",
+      "timezone": "Asia/Tokyo",
+      "language": "ja",
+      "allowed_domains": [
+        "release.tdnet.info"
+      ],
+      "coverage_note": "Checks each date in the selected window, up to 20 pages per day; unavailable dates and caps are reported."
+    },
+    {
+      "kind": "exchange_index",
+      "enabled": true,
+      "collection_role": "market",
+      "discovery_only": true,
+      "retain_all_leads": true,
+      "tickers": [],
+      "id": "hkex-announcements",
+      "name": "HKEX — company title search",
+      "exchange_adapter": "hkex",
+      "url": "https://www1.hkexnews.hk/search/titleSearchServlet.do",
+      "scope_market": "HK",
+      "timezone": "Asia/Hong_Kong",
+      "language": "en",
+      "allowed_domains": [
+        "hkexnews.hk"
+      ],
+      "coverage_note": "Public English title search, up to 1,000 rows per day in the selected window. Reports remaining rows; Chinese-only filings need supplemental research."
     }
   ]
 }

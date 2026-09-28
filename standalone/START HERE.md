@@ -21,6 +21,8 @@ Click the email text to edit it. Use **Download edited .eml** or **Copy email** 
 
 This share copy scans the public latest-news feeds or pages of **Nikkei, Yomiuri, Asahi, Mainichi, Sentaku, Diamond, RTHK finance, South China Morning Post business, ABC Australia business, Focus Taiwan and CADE**. It also checks **SoftBank's official press-release feed** as one demo priority name. Other companies can appear in the broad scan. Sentaku is a monthly publication, so an issue month alone cannot establish a recent publication time.
 
+Public ASX current/previous business day lists, NZX recent announcements, dated TDnet pages and HKEX English title search are also included. Their headlines remain research leads until the linked filing is read. Review source errors, actual snapshot dates, daily coverage and truncation flags.
+
 These are finite scans of the configured latest lists; they do not search each site's entire archive or provide full article coverage. Matching articles are checked where publicly readable. Edit `watchlist.json` for your own company names and Japanese aliases, and `config.json` for source settings. Adding a ticker alone does not establish complete company coverage. `inbox.json` starts empty and can accept manually supplied public document URLs.
 
 No private example emails, screenshots, original research watchlist, prior drafts, history, credentials or email correspondence are included. This version has no connection to an internal publishing platform.
@@ -29,7 +31,7 @@ No private example emails, screenshots, original research watchlist, prior draft
 
 This is a working prototype, not a complete APAC research service. It generates source headlines and short excerpts for review. It does not yet provide full English summaries, translation, reliable fact-level novelty detection or deal calculations. A new document can repeat old facts. Body-only company mentions can be missed by headline discovery. Restricted content is not unlocked, and failed sources are reported. No matches in these limited sources does not establish that there is no news. There may be no eligible demo items on a given day.
 
-The default window is 24 hours in the Asia/Singapore timezone. There is no installed scheduler. Normal runs read the configured public sources; setup downloads Python dependencies.
+The default window is 72 hours on Monday, including Friday and weekend developments, and 24 hours on other days in the Asia/Singapore timezone. An explicit `--hours` overrides this. There is no installed scheduler. Normal runs read the configured public sources; setup downloads Python dependencies.
 
 ## Optional broader publisher search
 

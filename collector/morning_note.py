@@ -302,6 +302,15 @@ def within_window(published, precision, start, asof, tz):
     return "current" if dt >= start else "old"
 
 
+def resolve_lookback_hours(asof, config, explicit_hours=None):
+    """Use a longer Monday window to carry Friday news into the first weekday note."""
+    if explicit_hours is not None:
+        return explicit_hours
+    if asof.weekday() == 0:
+        return config.get("monday_lookback_hours", 72)
+    return config.get("lookback_hours", 24)
+
+
 def classify_record(record, source, watchlist, start, asof, prior):
     text = record["title"] + " " + record.get("text", "")
     matched = watch_matches(text, watchlist)
@@ -424,7 +433,7 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
             if log is not None:
                 log['stage'] = 'outside_window'
             continue
-        if broad and (not lead['market_relevant'] or lead['attention_score'] < source.get('min_attention_score', 35)):
+        if broad and not source.get('retain_all_leads') and (not lead['market_relevant'] or lead['attention_score'] < source.get('min_attention_score', 35)):
             report['excluded']['below_attention_threshold'] = report['excluded'].get('below_attention_threshold', 0) + 1
             if log is not None:
                 log['stage'] = 'below_attention_threshold'
@@ -440,6 +449,13 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
         item['discovery_matches'] = [w['ticker'] for w in watch_matches(discovery_text, watchlist)]
         if log is not None:
             log['stage'] = 'candidate_selected'
+        if source.get('discovery_only'):
+            item['article_error'] = 'Exchange headline metadata only; read the linked filing or issuer release before drafting.'
+            item['evidence_level'] = 'exchange_index'
+            prepared.append(item)
+            if log is not None:
+                log['stage'] = 'document_review_pending'
+            continue
         if source.get('article_url_pattern') and not re.search(source['article_url_pattern'], lead['url']):
             item['article_error'] = 'This link is a changing information page, not a verified individual release. Open it and select the specific document before drafting.'
             item['evidence_level'] = 'index_lead'
@@ -538,6 +554,9 @@ def collect(config, watchlist, inbox, asof, prior, discovery_log=None):
                 report['discovered'] = len(records)
                 records = expand_publisher_leads(records, source, source_watchlist, fetcher, start, asof, report,
                                                   config.get('max_documents_per_source', 12), discovery_log)
+            elif source['kind'] == 'exchange_index':
+                from exchange_discovery import collect_exchange
+                records = collect_exchange(source, fetcher, start, asof, report)
             else:
                 raw, kind, final_url = fetcher.get(source["url"])
             if source["kind"] == "feed":
@@ -607,7 +626,7 @@ def collect(config, watchlist, inbox, asof, prior, discovery_log=None):
                 report["index_links"] = len(seen)
                 if not seen:
                     raise ValueError("No article links found; the page layout may have changed")
-            elif source['kind'] != 'brave_search':
+            elif source['kind'] not in ('brave_search', 'exchange_index'):
                 raise ValueError("Unknown source kind")
             if (source.get('publisher') or source.get('issuer_official') or source['broad_discovery']) and source['kind'] != 'brave_search':
                 report['discovered'] = len(records)
@@ -988,8 +1007,6 @@ def main():
     config = read_json(config_path)
     if not config:
         raise ValueError("Configuration file is missing")
-    if args.hours:
-        config['lookback_hours'] = args.hours
     if args.topic is not None:
         config['topic'] = args.topic
     if args.mode:
@@ -1002,6 +1019,7 @@ def main():
     if asof.tzinfo is None:
         raise ValueError("--as-of must include an explicit UTC offset")
     asof = asof.astimezone(ZoneInfo(config["timezone"]))
+    config['lookback_hours'] = resolve_lookback_hours(asof, config, args.hours)
     watchlist = read_json(config_path.parent / config["watchlist_file"])
     if not isinstance(watchlist, list):
         raise ValueError("watchlist.json must contain a list of priority companies")

@@ -42,7 +42,7 @@ def select_python(workspace: Path) -> str:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace', type=Path, default=Path.cwd())
-    parser.add_argument('--hours', type=int, choices=(12, 24, 48, 72, 96), default=24)
+    parser.add_argument('--hours', type=int, choices=(12, 24, 48, 72, 96))
     parser.add_argument('--as-of')
     parser.add_argument('--priority-file', type=Path)
     args = parser.parse_args()
@@ -67,7 +67,9 @@ def main():
         (run / 'inbox.json').write_text('[]', encoding='utf-8')
         config = run / 'config.json'
         config.write_text(json.dumps(defaults, ensure_ascii=False, indent=2), encoding='utf-8')
-    command = [python, str(collector), 'run', '--config', str(config), '--mode', 'market-first', '--hours', str(args.hours), '--dry-run']
+    command = [python, str(collector), 'run', '--config', str(config), '--mode', 'market-first', '--dry-run']
+    if args.hours is not None:
+        command += ['--hours', str(args.hours)]
     if args.as_of:
         command += ['--as-of', args.as_of]
     result = subprocess.run(command, cwd=str(workspace), check=False)

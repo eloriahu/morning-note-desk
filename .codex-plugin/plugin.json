@@ -1,6 +1,6 @@
 {
   "name": "morning-note-desk",
-  "version": "0.1.0+codex.20260925003326",
+  "version": "0.1.1+codex.20260928031053",
   "description": "Discover APAC market events, research new developments and generate a cited morning email draft.",
   "author": {
     "name": "Local developer"
@@ -14,7 +14,7 @@
     "category": "Finance",
     "capabilities": [],
     "defaultPrompt": [
-      "Generate my APAC morning email from the last 24 hours.",
+      "Generate my APAC morning email, including Friday and weekend developments on Mondays.",
       "Find important new names beyond my priority list.",
       "Turn this research pack into a morning email draft."
     ]
