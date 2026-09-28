@@ -22,6 +22,9 @@ from urllib.parse import urlsplit
 _layout_spec = importlib.util.spec_from_file_location('morning_note_email_layout', Path(__file__).with_name('email_layout.py'))
 layout = importlib.util.module_from_spec(_layout_spec)
 _layout_spec.loader.exec_module(layout)
+_window_spec = importlib.util.spec_from_file_location('morning_note_market_windows', Path(__file__).resolve().parents[1] / 'collector' / 'market_windows.py')
+windows = importlib.util.module_from_spec(_window_spec)
+_window_spec.loader.exec_module(windows)
 
 
 SECTIONS = ("Merger Arbitrage", "Fundamental/Pre-Event", "Relative Value", "Other Strategy")
@@ -82,12 +85,38 @@ def validate_pack(pack):
     start = timestamp(result.get("window_start"))
     if start > as_of:
         raise ValueError("window_start must not be after as_of")
+    market_windows = result.get('market_windows', {})
+    if not isinstance(market_windows, dict):
+        raise ValueError('market_windows must be an object')
+    market_mode = result.get('timing_mode') == 'market_close' or bool(market_windows)
+    if market_mode and not market_windows:
+        raise ValueError('Market-close timing requires market_windows from the collection or verified session calendar')
+    starts = {}
+    for market, window in market_windows.items():
+        code = windows.market_code(market)
+        if code in starts or not isinstance(window, dict):
+            raise ValueError('Invalid or duplicated market window')
+        market_start = timestamp(window.get('window_start'))
+        if not start <= market_start <= as_of:
+            raise ValueError('Market window must be inside the overall research envelope')
+        if window.get('as_of') and timestamp(window['as_of']) != as_of:
+            raise ValueError('Market window cutoff differs from the edition cutoff')
+        starts[code] = market_start
     stories = result.get("stories", [])
     if not isinstance(stories, list) or not all(isinstance(story, dict) for story in stories):
         raise ValueError("stories must be a list of story objects")
     ids = [text(story.get("id")) for story in stories]
     for story in stories:
         reasons = []
+        story_start = start
+        if market_mode:
+            markets = windows.infer_markets(story, {})
+            if not markets or any(m not in starts for m in markets):
+                reasons.append('The relevant market and its close window must be established.')
+            else:
+                story_start = max(starts[m] for m in markets)
+                story['timing_markets'] = markets
+        story['applied_window_start'] = story_start.isoformat()
         if not isinstance(story.get("id"), str) or not story["id"].strip():
             reasons.append("Story ID is missing.")
         elif ids.count(story["id"]) > 1:
@@ -141,7 +170,7 @@ def validate_pack(pack):
                     reasons.append(f"Bullet {number} source publication time is unconfirmed.")
                 try:
                     published = timestamp(source.get("published_at"))
-                    if not start <= published <= as_of:
+                    if not story_start <= published <= as_of:
                         reasons.append(f"Bullet {number} source is outside the selected time window.")
                 except (ValueError, TypeError):
                     reasons.append(f"Bullet {number} source needs an ISO publication timestamp with timezone.")
@@ -303,13 +332,16 @@ def calendar_review(pack):
 
 def review_page(pack, body, subject, attachment=None):
     held = [story for story in pack.get("stories", []) if story["composition_status"] == "hold"]
+    market_table = ''
+    if pack.get('market_windows'):
+        market_table = '<h2>News windows by market</h2><table><tr><th>Market</th><th>Start (inclusive)</th></tr>' + ''.join('<tr><td>' + esc(m) + '</td><td>' + esc(w['window_start']) + '</td></tr>' for m, w in pack['market_windows'].items()) + '</table><p>Each window ends at the edition cutoff. Check exchange holidays and special sessions against the research record.</p>'
     output = ['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
               f'<title>{esc(subject)} — review</title><style>{STYLE}</style></head><body><main>',
               '<section class="notice"><h1>Review your morning email</h1><p>Codex researched and drafted this pack. '
               'The composer checked citation links, source access, timestamps and required fields. '
               'An editor must still check factual support, company identity, novelty and English wording.</p>',
               f'<p class="status">{pack["composition"]["ready_count"]} draft stories · {len(held)} held for research/review. No email has been sent.</p>',
-              f'<p class="status">Research window: {esc(pack["window_start"])} to {esc(pack["as_of"])}. AI-generated draft; review before sending.</p></section>',
+              f'<p class="status">Research window: {esc(pack["window_start"])} to {esc(pack["as_of"])}. AI-generated draft; review before sending.</p>{market_table}</section>',
               '<div class="toolbar"><label>Subject<input id="subject" type="text" value="' + esc(subject) + '"></label>',
               '<button id="copy" type="button">Copy edited email</button><button id="download" type="button">Download edited email draft</button>',
               '<span id="feedback" role="status"></span></div><p>Edit the email below before copying or downloading it. Edits stay in this page until you copy or download.</p>',

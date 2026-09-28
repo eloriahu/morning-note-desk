@@ -9,6 +9,8 @@ Save UTF-8 JSON with these fields:
 | `title` | Email subject; the masthead uses the local house title when configured. |
 | `as_of` | Edition cutoff: full ISO timestamp with timezone, such as `2026-09-24T08:00:00+08:00`. |
 | `window_start` | Inclusive start of the research window, using the same full timestamp format. |
+| `timing_mode` | Use `market_close` for the default workflow, or `rolling_hours` for an explicit hours override. |
+| `market_windows` | In market-close mode, copy the verified per-market map from collection: each market has `window_start` and `as_of`, with optional session-date/basis notes. The top-level `window_start` is only the earliest collection envelope. See [market timing](market-windows.md). |
 | `stories` | Array of researched story objects described below. Include held candidates as well as ready stories. |
 | `coverage` | Array of short, honest strings describing sources checked, failures, access limits and scope. A failed search cannot establish that there was no news. |
 | `priority_checks` | Optional JSON record of extra checks on the user's priority companies. These companies do not restrict broad discovery. |
@@ -22,6 +24,7 @@ Each story has:
 | `id` | Unique nonempty string within this edition. |
 | `company` | Researched company identity in English. If unresolved, leave empty and hold the story. |
 | `tickers` | Array of verified ticker strings. An empty array is permitted when identity is established but a ticker has not been verified; never invent a ticker. |
+| `market` | Primary market for timing, such as `JP`, `KR`, `AU` or `HK`. Required when ticker markets are unavailable or a primary listing needs to be selected. With several ticker markets and no explicit primary market, the latest starting point applies. Use `GLOBAL` only for regional macro context. |
 | `category` | Exactly one of `Merger Arbitrage`, `Fundamental/Pre-Event`, `Relative Value`, `Other Strategy`. |
 | `headline` | Short English headline supported by the cited evidence. |
 | `bullets` | One or more objects with `text` (concise English synthesis) and `source_urls` (array of exact URLs present in this story's `sources`). Every bullet needs citations. |
@@ -35,6 +38,8 @@ Source `access` is `readable` only when the relevant public text was actually av
 To publish a story into the draft, the composer requires a known company, a unique ID, a headline, a supported category, `review_status: "ready"`, `novelty: "new"` or `"changed"`, and at least one nonempty cited bullet. **Every cited source** must be readable, have `date_precision: "time"`, and have a timezone-aware publication timestamp within `[window_start, as_of]`. All citation URLs must match that story's source list. Unsafe URLs, duplicate source URLs, restricted sources, old/future evidence and missing citation metadata hold the entire story. An older document can remain as uncited context in `sources`; if a bullet depends on it, split the current update from historical context or hold the unsupported update.
 
 Structural validation does not prove that English wording is accurate, that a source supports a bullet, that a company/ticker mapping is right, or that a story is new. Codex must complete those checks before marking a story ready. The user reviews the resulting email.
+
+In `market_close` mode, every cited publication must fall inside the story's applicable market window, not merely the overall envelope. Missing market/window mappings hold the story. The editor displays market windows and stores each story's `applied_window_start`; these fields do not appear in the distribution email. Older packs without market timing remain compatible with their explicit global window.
 
 This deliberately incomplete example demonstrates a **held workflow item**, not a financial claim or a real news event:
 

@@ -14,7 +14,7 @@
     "The Codex plugin researches, translates and writes supported English summaries before passing them to the email formatter. The standalone collector does not perform AI analysis.",
     "Publisher feeds and current headline pages have finite depth. This does not cover every major news website, every article or the full 24-hour archive.",
     "Brave API search is optional and disabled. Bounded public exchange indexes are connected; paid news access, market-data calculations and email sending are not connected.",
-    "Monday defaults to a 72-hour window to include Friday and weekend developments; explicit --hours overrides this."
+    "Default news windows begin at each market's latest completed desk close; verify holidays and special sessions. Explicit --hours selects a rolling window."
   ],
   "discovery_mode": "market_first",
   "min_attention_score": 35,
@@ -361,5 +361,6 @@
   "watchlist_file": "watchlist.json",
   "inbox_file": "inbox.json",
   "topic": "",
-  "monday_lookback_hours": 72
+  "monday_lookback_hours": 72,
+  "timing_mode": "market_close"
 }

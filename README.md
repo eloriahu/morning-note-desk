@@ -38,7 +38,7 @@ The included `collector/watchlist.json` is empty. To add *your own local* priori
 python scripts/collect_news.py --workspace . --priority-file path/to/your-priorities.json
 ```
 
-The priority file is a JSON array of objects with `ticker`, `name`, optional `aliases`, and optional `category`. These names get extra attention; the broad news scan can discover other companies. Use `--as-of 2026-09-25T08:00:00+08:00` to set an explicit edition cutoff, or omit it to use the current time. The default window is 72 hours on Monday, covering Friday and weekend developments, and 24 hours on other days in Singapore time. An explicit `--hours` overrides that default. Compare prior editions to avoid repeating unchanged stories.
+The priority file is a JSON array of objects with `ticker`, `name`, optional `aliases`, and optional `category`. These names get extra attention; the broad news scan can discover other companies. Use `--as-of 2026-09-25T08:00:00+08:00` to set an explicit edition cutoff, or omit it to use the current time. By default, news starts at each market's latest completed desk close: Japan/Korea 14:30 SGT and Australia 14:15 SGT on normal weekdays. Monday morning starts at Friday closes and includes the weekend; Monday afternoon uses that day's close for markets already closed. Markets still trading use their previous session. Verify holidays and shortened sessions using [market timing](skills/morning-note/references/market-windows.md). An explicit `--hours` selects a rolling window. Compare prior editions to avoid repeating unchanged stories.
 
 After researching the leads, write `research.json` according to [the research pack schema](skills/morning-note/references/draft-schema.md), then compose the email:
 

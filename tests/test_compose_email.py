@@ -28,6 +28,39 @@ def example_pack():
 
 
 class ComposerTests(unittest.TestCase):
+    def market_pack(self):
+        pack = example_pack()
+        pack.update(as_of='2026-09-28T16:00:00+08:00', window_start='2026-09-25T14:15:00+08:00', timing_mode='market_close',
+                    market_windows={'JP': {'window_start': '2026-09-28T14:30:00+08:00'}, 'AU': {'window_start': '2026-09-28T14:15:00+08:00'}})
+        pack['stories'][0]['tickers'] = ['TEST JP']
+        return pack
+
+    def test_market_window_overrides_broad_weekend_envelope(self):
+        for clock, ready in [('14:29:59', 0), ('14:30:00', 1), ('15:00:00', 1), ('16:00:01', 0)]:
+            pack = self.market_pack()
+            pack['stories'][0]['sources'][0]['published_at'] = f'2026-09-28T{clock}+08:00'
+            self.assertEqual(composer.validate_pack(pack)['composition']['ready_count'], ready)
+
+    def test_explicit_primary_market_and_unknown_market(self):
+        pack = self.market_pack()
+        story = pack['stories'][0]
+        story['sources'][0]['published_at'] = '2026-09-28T14:20:00+08:00'
+        story['market'] = 'AU'
+        self.assertEqual(composer.validate_pack(pack)['composition']['ready_count'], 1)
+        story['market'] = 'UNKNOWN'
+        self.assertEqual(composer.validate_pack(pack)['composition']['ready_count'], 0)
+
+    def test_missing_market_windows_fail_and_table_is_editor_only(self):
+        pack = self.market_pack()
+        pack['stories'][0]['sources'][0]['published_at'] = '2026-09-28T15:00:00+08:00'
+        with tempfile.TemporaryDirectory() as temp:
+            composer.compose(pack, temp)
+            self.assertIn('News windows by market', (Path(temp) / 'review.html').read_text(encoding='utf-8'))
+            self.assertNotIn('News windows by market', (Path(temp) / 'email.html').read_text(encoding='utf-8'))
+        pack.pop('market_windows')
+        with self.assertRaises(ValueError):
+            composer.validate_pack(pack)
+
     def test_ready_sourced_story_becomes_unsent_eml_without_recipients(self):
         with tempfile.TemporaryDirectory() as temp:
             result = composer.compose(example_pack(), temp)

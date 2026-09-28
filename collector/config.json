@@ -15,7 +15,8 @@
     "Broad public discovery is independent of the optional priority list.",
     "All scanned headlines are retained for AI review. Keyword rankings are provisional.",
     "Current feeds and first pages provide bounded coverage; restricted articles remain leads.",
-    "Run the Morning Note Desk skill in Codex to research and write the final email. This collector alone does not perform AI analysis."
+    "Run the Morning Note Desk skill in Codex to research and write the final email. This collector alone does not perform AI analysis.",
+    "Default news windows begin at each market's latest completed desk close; verify holidays and special sessions. Explicit --hours selects a rolling window."
   ],
   "sources": [
     {
@@ -359,5 +360,6 @@
       ],
       "coverage_note": "Public English title search, up to 1,000 rows per day in the selected window. Reports remaining rows; Chinese-only filings need supplemental research."
     }
-  ]
+  ],
+  "timing_mode": "market_close"
 }

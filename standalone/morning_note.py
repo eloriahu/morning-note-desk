@@ -312,8 +312,10 @@ def resolve_lookback_hours(asof, config, explicit_hours=None):
 
 
 def classify_record(record, source, watchlist, start, asof, prior):
+    from market_windows import record_window
     text = record["title"] + " " + record.get("text", "")
     matched = watch_matches(text, watchlist)
+    start, timing_markets, timing_resolved = record_window(record, source, start, [w['ticker'] for w in matched])
     tickers = list(dict.fromkeys(source.get("tickers", []) + [m["ticker"] for m in matched]))
     active_tickers = {w["ticker"] for w in watchlist}
     tickers = [t for t in tickers if t in active_tickers]
@@ -350,6 +352,8 @@ def classify_record(record, source, watchlist, start, asof, prior):
     if status == "unchanged" and old.get("edition_date", asof.date().isoformat()) < asof.date().isoformat():
         return None, "previous_edition_unchanged"
     flags = []
+    if not timing_resolved:
+        flags.append('Market timing is unresolved; identify the relevant market and apply its close before drafting.')
     flags.append("Newly found document or wording; material novelty versus known deal facts still requires review.")
     if broad:
         flags.append('Attention ranking is a provisional event-keyword screen; confirm relevance and identities against the source.')
@@ -383,7 +387,8 @@ def classify_record(record, source, watchlist, start, asof, prior):
                   source=source["name"], source_id=source["id"], published=dt.isoformat() if dt else None,
                   date_precision=precision, fetched_at=datetime.now(timezone.utc).isoformat(),
                   content_hash=content_hash, change=status, previous_title=previous, flags=flags,
-                  eligible=window == "current" and not (publisher and access != "readable") and not requires_translation and not discovery_only and not topic_discovery_only and not (broad and not tickers),
+                  eligible=window == "current" and timing_resolved and not (publisher and access != "readable") and not requires_translation and not discovery_only and not topic_discovery_only and not (broad and not tickers),
+                  applied_window_start=start.isoformat(), timing_markets=timing_markets, timing_resolved=timing_resolved,
                   access_status=access, language=language, historical=False,
                   collection_role=source.get('collection_role', 'priority'), priority_match=bool(tickers), identity_verified=bool(tickers))
     return output, window
@@ -397,6 +402,7 @@ def domain_allowed(url, domains):
 def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, report, limit, discovery_log=None):
     """Fetch matched public articles; access failures remain visible review leads."""
     from publisher_extract import extract_publisher_document
+    from market_windows import record_window
     prepared = []
     fetched = 0
     domains = source.get('allowed_domains') or [urlsplit(source['url']).hostname]
@@ -408,12 +414,14 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
         ranked = []
         for lead in leads:
             matches = watch_matches(lead.get('title', '') + ' ' + lead.get('text', ''), watchlist)
+            lead_start, timing_markets, timing_resolved = record_window(lead, source, start, [w['ticker'] for w in matches])
             scored = dict(lead, **triage(lead.get('title', ''), lead.get('text', ''), [w['ticker'] for w in matches]))
             ranked.append(scored)
             _, precision = parse_date(lead.get('published', ''), source.get('timezone', 'UTC'))
             entry = dict(title=lead.get('title', ''), url=lead.get('url', ''), source=source['name'], source_id=source['id'],
                          collection_role='market', published=lead.get('published', ''), date_precision=precision,
-                         window_status=within_window(lead.get('published', ''), precision, start, asof, source.get('timezone', 'UTC')),
+                         window_status=within_window(lead.get('published', ''), precision, lead_start, asof, source.get('timezone', 'UTC')),
+                         applied_window_start=lead_start.isoformat(), timing_markets=timing_markets, timing_resolved=timing_resolved,
                          attention_score=scored['attention_score'], attention_reasons=scored['attention_reasons'],
                          priority_matches=[w['ticker'] for w in matches], stage='headline_scanned')
             audit[id(scored)] = entry
@@ -423,12 +431,13 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
     for lead in leads:
         log = audit.get(id(lead))
         discovery_text = lead.get('title', '') + ' ' + lead.get('text', '') + ' ' + lead.get('discovery_snippet', '')
+        lead_start, _, _ = record_window(lead, source, start, [w['ticker'] for w in watch_matches(discovery_text, watchlist)])
         if not broad and not fixed_issuer and not watch_matches(discovery_text, watchlist):
             report['excluded']['discovery_no_name_match'] = report['excluded'].get('discovery_no_name_match', 0) + 1
             continue
         # Official publisher feed dates are usable; search-engine date hints are not.
         dt, precision = parse_date(lead.get('published', ''), source.get('timezone', 'Asia/Tokyo'))
-        if dt is not None and within_window(lead['published'], precision, start, asof, source.get('timezone', 'Asia/Tokyo')) in ('old', 'future'):
+        if dt is not None and within_window(lead['published'], precision, lead_start, asof, source.get('timezone', 'Asia/Tokyo')) in ('old', 'future'):
             report['excluded']['outside_window'] = report['excluded'].get('outside_window', 0) + 1
             if log is not None:
                 log['stage'] = 'outside_window'
@@ -510,8 +519,10 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
 
 
 def collect(config, watchlist, inbox, asof, prior, discovery_log=None):
+    from market_windows import build_windows
     fetcher = Fetcher(config)
-    start = asof - timedelta(hours=config["lookback_hours"])
+    market_windows, start = build_windows(config, asof)
+    config.update(market_windows=market_windows, window_start=start.isoformat())
     sources = list(config["sources"])
     for i, entry in enumerate(inbox):
         sources.append(dict(entry, id=f"inbox-{i+1}", name=entry.get("name", "Public announcement"),
@@ -521,13 +532,15 @@ def collect(config, watchlist, inbox, asof, prior, discovery_log=None):
         sources.sort(key=lambda item: item.get('collection_role') != 'market')
     candidates, coverage = [], []
     for source in sources:
-        source = dict(source, topic=config.get("topic", ""),
+        source = dict(source, topic=config.get("topic", ""), market_windows=market_windows,
                       broad_discovery=market_first and source.get('collection_role') == 'market')
         report = {"id": source["id"], "name": source["name"], "url": source.get("url", ""),
                   "tickers": source.get("tickers", []), "status": "disabled", "discovered": 0,
                   "matched": 0, "excluded": {}, "errors": [], "coverage_note": source.get('coverage_note', ''),
                   "issuer_official": source.get('issuer_official', False), "scope_market": source.get('scope_market', ''),
                   "collection_role": source.get('collection_role', 'priority')}
+        report['timing_mode'] = config.get('timing_mode', 'rolling_hours')
+        report['market_windows'] = market_windows
         if not source.get("enabled", True):
             report["errors"].append(source.get("disabled_reason", "Not enabled"))
             coverage.append(report)
@@ -806,7 +819,8 @@ def export_payload(records, coverage, config, asof):
                           "candidate_ids": [r['id'] for r in matched]})
     return {"schema_version": "morning-note-draft/v1", "integration_status": "proposed contract; downstream platform not connected",
             "draft_only": True, "as_of": asof.isoformat(),
-            "window_start": (asof - timedelta(hours=config.get('lookback_hours', 24))).isoformat(),
+            "window_start": config.get('window_start') or (asof - timedelta(hours=config.get('lookback_hours', 24))).isoformat(),
+            "timing_mode": config.get('timing_mode', 'rolling_hours'), "market_windows": config.get('market_windows', {}),
             "topic": config.get('topic') or 'Any material development',
             "watchlist_results": by_ticker, "items": [
                 {"id": r['id'], "tickers": r['tickers'], "category": r['category'],
@@ -826,7 +840,8 @@ def export_payload(records, coverage, config, asof):
 def email_body(records, config, asof, historical=False):
     mode = "HISTORICAL SAMPLE — FOR REVIEW" if historical else "DRAFT — FOR REVIEW"
     hours = config.get('lookback_hours', 24)
-    summary = "Reconstructed from the supplied email; not a fresh market update." if historical else f"Candidate new information in the last {hours} hours. Topic: {config.get('topic') or 'material developments'}."
+    period = 'since each market\'s latest completed close' if config.get('timing_mode') == 'market_close' else f'in the last {hours} hours'
+    summary = "Reconstructed from the supplied email; not a fresh market update." if historical else f"Candidate new information {period}. Topic: {config.get('topic') or 'material developments'}."
     body = [f'<div style="font-family:Arial,sans-serif;color:#17243a;max-width:780px;margin:auto;padding:28px;background:white">',
             f'<p style="font-size:11px;letter-spacing:1.5px;color:#52677b">{mode}</p>',
             f'<h1 style="font-size:28px;margin:10px 0">{e(config["title"])}</h1>',
@@ -910,12 +925,15 @@ def render(records, coverage, config, asof, out, historical=False):
     (out / "morning-note.txt").write_text(plain, encoding="utf-8")
     discovery_log = config.get('discovery_log', [])
     write_json(out / "evidence.json", {"asof": asof.isoformat(), "historical": historical, "candidates": records, "coverage": coverage,
+                                      "timing_mode": config.get('timing_mode', 'rolling_hours'), "window_start": config.get('window_start'), "market_windows": config.get('market_windows', {}),
                                       "discovery_mode": config.get('discovery_mode', 'targeted'), "headline_audit": discovery_log})
     write_json(out / 'headline-audit.json', {"asof": asof.isoformat(), "headlines": discovery_log,
                                           "note": "All discovered market headlines, including low-ranked and out-of-window items; rankings are provisional."})
     payload = export_payload(records, coverage, config, asof)
     write_json(out / "draft-payload.json", payload)
     review = []
+    if config.get('market_windows') and not historical:
+        review.append('<h3>News windows by market</h3><ul>' + ''.join(f'<li>{e(m)}: {e(w["window_start"])} to {e(asof.isoformat())}</li>' for m, w in config['market_windows'].items()) + '</ul><p>Normal weekday schedule with configured holiday/short-session overrides.</p>')
     for c in coverage:
         counts = f'{c.get("discovered", 0)} headlines scanned · {c["articles_attempted"]} articles checked' if 'articles_attempted' in c else f'{c.get("discovered", 0)} source records checked'
         review.append(f'<div class="source"><strong>{e(c["name"])}</strong><span class="pill {e(c["status"])}">{e(c["status"])}</span><p>{c.get("matched", 0)} matches · {counts}</p>')
@@ -964,7 +982,7 @@ def render(records, coverage, config, asof, out, historical=False):
 {tracking_banner}
 {radar}
 <main class="layout"><section class="left"><div class="intro"><h1>Your morning draft</h1><p>Click the email to edit. Changes stay in this page until you download the edited email.</p><p id="feedback" role="status"></p></div><div id="email" contenteditable="true" spellcheck="true">{body}</div>{''.join(queue)}</section>
-<aside><h2>Review desk</h2><div class="stats"><div><b>{len(selected)}</b><span>in draft</span></div><div><b>{len(held)}</b><span>held for review</span></div></div><h3>Before you use it</h3><ul class="checks">{''.join(checks)}</ul><h3>Collection status</h3>{''.join(review) or '<p>Local email import only. No public sources fetched for this sample.</p>'}<details><summary>Ticker-by-ticker results</summary><ul class="checks">{ticker_checks}</ul></details><details open><summary>Coverage limits</summary><ul class="checks">{notes}</ul></details><p class="small">Cutoff: {e(asof.isoformat())}<br>Window: {config.get('lookback_hours', 24)} hours<br>Change labels compare documents, not contractual deal terms.</p><p><a href="evidence.json">Evidence and collection log</a></p><a href="draft-payload.json">Structured draft export</a></aside></main>
+<aside><h2>Review desk</h2><div class="stats"><div><b>{len(selected)}</b><span>in draft</span></div><div><b>{len(held)}</b><span>held for review</span></div></div><h3>Before you use it</h3><ul class="checks">{''.join(checks)}</ul><h3>Collection status</h3>{''.join(review) or '<p>Local email import only. No public sources fetched for this sample.</p>'}<details><summary>Ticker-by-ticker results</summary><ul class="checks">{ticker_checks}</ul></details><details open><summary>Coverage limits</summary><ul class="checks">{notes}</ul></details><p class="small">Cutoff: {e(asof.isoformat())}<br>Window: {e('per-market close (see table)' if config.get('timing_mode') == 'market_close' else str(config.get('lookback_hours', 24)) + ' hours')}<br>Change labels compare documents, not contractual deal terms.</p><p><a href="evidence.json">Evidence and collection log</a></p><a href="draft-payload.json">Structured draft export</a></aside></main>
 {overview}
 <script type="application/json" id="draft-meta">{json.dumps({"subject": str(msg['Subject']), "date": str(msg['Date'])}).replace('<', chr(92)+'u003c')}</script><script>{script}</script></body></html>'''
     (out / "review.html").write_text(page, encoding="utf-8")
@@ -1020,6 +1038,8 @@ def main():
         raise ValueError("--as-of must include an explicit UTC offset")
     asof = asof.astimezone(ZoneInfo(config["timezone"]))
     config['lookback_hours'] = resolve_lookback_hours(asof, config, args.hours)
+    if args.hours is not None:
+        config['timing_mode'] = 'rolling_hours'
     watchlist = read_json(config_path.parent / config["watchlist_file"])
     if not isinstance(watchlist, list):
         raise ValueError("watchlist.json must contain a list of priority companies")

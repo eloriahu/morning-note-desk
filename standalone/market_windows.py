@@ -1,0 +1,95 @@
+"""Per-market news windows for normal weekdays, with explicit session overrides.
+
+These are desk news cutoffs, not an authoritative exchange holiday calendar.
+AU deliberately preserves the requested fixed 14:15 Singapore desk cutoff.
+"""
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+
+DEFAULT_CLOSES = {
+    'JP': {'timezone': 'Asia/Tokyo', 'close': '15:30'},
+    'KR': {'timezone': 'Asia/Seoul', 'close': '15:30'},
+    'AU': {'timezone': 'Asia/Singapore', 'close': '14:15', 'basis': 'fixed SGT desk cutoff'},
+    'HK': {'timezone': 'Asia/Hong_Kong', 'close': '16:10'},
+    'CH': {'timezone': 'Asia/Shanghai', 'close': '15:00'},
+    'TT': {'timezone': 'Asia/Taipei', 'close': '13:30'},
+    'NZ': {'timezone': 'Pacific/Auckland', 'close': '16:45'},
+    'SP': {'timezone': 'Asia/Singapore', 'close': '17:16'},
+    'IN': {'timezone': 'Asia/Kolkata', 'close': '15:30'},
+    'MK': {'timezone': 'Asia/Kuala_Lumpur', 'close': '17:00'},
+}
+ALIASES = {'CN': 'CH', 'TW': 'TT', 'SG': 'SP', 'MY': 'MK', 'KS': 'KR', 'KQ': 'KR'}
+
+
+def market_code(value):
+    code = str(value or '').strip().upper()
+    return ALIASES.get(code, code)
+
+
+def latest_close(asof, rule):
+    zone = ZoneInfo(rule['timezone'])
+    local = asof.astimezone(zone)
+    overrides = rule.get('sessions', {})  # ISO date -> HH:MM, or null for a holiday.
+    for offset in range(370):
+        day = local.date() - timedelta(days=offset)
+        key = day.isoformat()
+        if key in overrides:
+            close = overrides[key]
+        else:
+            close = rule['close'] if day.weekday() < 5 else None
+        if close is None:
+            continue
+        cutoff = datetime.combine(day, time.fromisoformat(close), zone)
+        if cutoff <= asof:
+            return cutoff, key, 'session override' if key in overrides else rule.get('basis', 'normal weekday close')
+    raise ValueError('No completed market session within 370 days')
+
+
+def build_windows(config, asof):
+    if asof.tzinfo is None:
+        raise ValueError('The edition cutoff requires a timezone')
+    mode = config.get('timing_mode', 'rolling_hours')
+    if mode == 'rolling_hours':
+        return {}, asof - timedelta(hours=config.get('lookback_hours', 24))
+    if mode != 'market_close':
+        raise ValueError('timing_mode must be market_close or rolling_hours')
+    rules = {m: dict(rule) for m, rule in DEFAULT_CLOSES.items()}
+    for m, rule in config.get('market_close_rules', {}).items():
+        code = market_code(m)
+        rules[code] = dict(rules.get(code, {}), **rule)
+    output = {}
+    display_zone = ZoneInfo(config.get('timezone', 'Asia/Singapore'))
+    for market, rule in rules.items():
+        cutoff, day, basis = latest_close(asof, rule)
+        output[market] = dict(window_start=cutoff.astimezone(display_zone).isoformat(),
+                              as_of=asof.isoformat(), session_date=day, basis=basis,
+                              calendar_status='Normal weekdays plus configured session overrides; verify exchange holidays and special sessions.')
+    earliest = min(datetime.fromisoformat(w['window_start']) for w in output.values())
+    output['GLOBAL'] = dict(window_start=earliest.isoformat(), as_of=asof.isoformat(),
+                            basis='Regional macro context: earliest of the market windows')
+    return output, earliest
+
+
+def infer_markets(record, source, matched_tickers=()):
+    explicit = record.get('market')
+    if explicit:
+        return [market_code(explicit)]
+    tickers = record.get('exchange_tickers') or record.get('tickers') or list(matched_tickers) or source.get('tickers', [])
+    markets = sorted({market_code(t.split()[-1]) for t in tickers if isinstance(t, str) and t.split()})
+    if markets:
+        return markets
+    hint = source.get('scope_market') or source.get('timing_market')
+    return [market_code(hint)] if hint else []
+
+
+def record_window(record, source, fallback, matched_tickers=()):
+    windows = source.get('market_windows', {})
+    markets = infer_markets(record, source, matched_tickers)
+    if not windows:
+        return fallback, markets, True
+    valid = bool(markets) and all(m in windows for m in markets)
+    if valid:
+        # Multi-market candidates must meet each cutoff until research selects a primary market.
+        return max(datetime.fromisoformat(windows[m]['window_start']) for m in markets), markets, True
+    return fallback, markets, False
