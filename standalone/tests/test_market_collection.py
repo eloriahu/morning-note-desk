@@ -106,7 +106,7 @@ class MarketCollectionTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(coverage[0]['scope_tickers'], ['TEST AU'])
         self.assertEqual(audit[0]['timing_markets'], ['AU'])
-        self.assertEqual(records[0]['applied_window_start'], '2026-09-28T14:15:00+08:00')
+        self.assertEqual(records[0]['applied_window_start'], '2026-09-28T14:10:00+08:00')
         self.assertTrue(records[0]['eligible'])
 
     def test_authoritative_source_scope_understands_country_alias(self):

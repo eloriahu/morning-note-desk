@@ -1,4 +1,4 @@
-"""Per-market news windows for normal weekdays, with explicit session overrides.
+"""Morning market-close windows and a strict daily 14:10 Singapore afternoon floor.
 
 These are desk news cutoffs, not an authoritative exchange holiday calendar.
 AU deliberately preserves the requested fixed 14:15 Singapore desk cutoff.
@@ -60,25 +60,15 @@ def latest_close(asof, rule):
 
 
 def edition_for(config, asof):
-    """Weekday afternoons use only that day's session; mornings span overnight."""
+    """Afternoons use the fixed Singapore window every day; mornings span overnight."""
     edition = config.get('timing_edition', 'auto')
     if edition not in ('auto', 'morning', 'afternoon'):
         raise ValueError('timing_edition must be auto, morning or afternoon')
     if edition == 'auto':
-        local = asof.astimezone(ZoneInfo(config.get('timezone', 'Asia/Singapore')))
+        local = asof.astimezone(ZoneInfo('Asia/Singapore'))
         boundary = time.fromisoformat(config.get('afternoon_start', '12:00'))
-        edition = 'afternoon' if local.weekday() < 5 and local.time() >= boundary else 'morning'
+        edition = 'afternoon' if local.time() >= boundary else 'morning'
     return edition
-
-
-def same_day_close(day, rule):
-    zone = ZoneInfo(rule['timezone'])
-    key = day.isoformat()
-    overrides = rule.get('sessions', {})
-    clock = overrides.get(key, rule['close'] if day.weekday() < 5 else None)
-    basis = 'session override' if key in overrides else rule.get('basis', 'normal weekday close')
-    cutoff = datetime.combine(day, time.fromisoformat(clock), zone) if clock else None
-    return cutoff, key, basis
 
 
 def build_windows(config, asof):
@@ -96,31 +86,29 @@ def build_windows(config, asof):
     output = {}
     display_zone = ZoneInfo(config.get('timezone', 'Asia/Singapore'))
     edition = edition_for(config, asof)
+    if edition == 'afternoon':
+        singapore = ZoneInfo('Asia/Singapore')
+        day = asof.astimezone(singapore).date()
+        cutoff = datetime.combine(day, time(14, 10), singapore)
+        status = 'active' if asof > cutoff else 'pending_start'
+        start = min(cutoff, asof)
+        window = dict(window_start=start.astimezone(display_zone).isoformat(),
+                      as_of=asof.isoformat(), session_date=day.isoformat(),
+                      status=status, edition=edition, start_inclusive=False,
+                      expected_start=cutoff.isoformat(),
+                      basis='Strictly after 14:10 Singapore on the edition date, for every market',
+                      calendar_status='Fixed afternoon clock window; exchange sessions do not change it.')
+        return {market: dict(window) for market in (*rules, 'GLOBAL')}, start
     for market, rule in rules.items():
-        status = 'active'
-        expected_close = None
-        if edition == 'afternoon':
-            # The edition date stays fixed even after midnight in New Zealand.
-            cutoff, day, basis = same_day_close(asof.astimezone(display_zone).date(), rule)
-            if cutoff is None:
-                status = 'no_session'
-            elif cutoff > asof:
-                status = 'pending_close'
-                expected_close = cutoff.astimezone(display_zone).isoformat()
-            if status != 'active':
-                # Empty interval: status explicitly blocks even a release at as_of.
-                cutoff = asof
-        else:
-            cutoff, day, basis = latest_close(asof, rule)
+        cutoff, day, basis = latest_close(asof, rule)
         output[market] = dict(window_start=cutoff.astimezone(display_zone).isoformat(),
                               as_of=asof.isoformat(), session_date=day, basis=basis,
-                              status=status, edition=edition, expected_close=expected_close,
+                              status='active', edition=edition, start_inclusive=True,
                               calendar_status='Normal weekdays plus configured session overrides; verify exchange holidays and special sessions.')
     earliest = min(datetime.fromisoformat(w['window_start']) for w in output.values())
     output['GLOBAL'] = dict(window_start=earliest.isoformat(), as_of=asof.isoformat(),
-                            status='active' if any(w['status'] == 'active' for w in output.values()) else 'pending_close',
-                            edition=edition,
-                            basis='Regional macro context: earliest active market window; empty if none has closed')
+                            status='active', edition=edition, start_inclusive=True,
+                            basis='Regional macro context: earliest of the morning market windows')
     return output, earliest
 
 
@@ -150,3 +138,8 @@ def record_window(record, source, fallback, matched_tickers=()):
         active = all(windows[m].get('status', 'active') == 'active' for m in markets)
         return max(datetime.fromisoformat(windows[m]['window_start']) for m in markets), markets, active
     return fallback, markets, False
+
+
+def start_inclusive(source, markets):
+    windows = source.get('market_windows', {})
+    return all(windows.get(m, {}).get('start_inclusive', True) for m in (markets or ['GLOBAL']))

@@ -286,7 +286,7 @@ def event_label(text):
     return next((name for name, pattern in EVENT_RULES if re.search(pattern, text, re.I)), "Company update")
 
 
-def within_window(published, precision, start, asof, tz):
+def within_window(published, precision, start, asof, tz, inclusive=True):
     dt, _ = parse_date(published, tz)
     if dt is None:
         return "date_needs_review"
@@ -299,7 +299,7 @@ def within_window(published, precision, start, asof, tz):
         return "date_needs_review"
     if dt > asof:
         return "future"
-    return "current" if dt >= start else "old"
+    return "current" if dt > start or (inclusive and dt == start) else "old"
 
 
 def resolve_lookback_hours(asof, config, explicit_hours=None):
@@ -312,7 +312,7 @@ def resolve_lookback_hours(asof, config, explicit_hours=None):
 
 
 def classify_record(record, source, watchlist, start, asof, prior):
-    from market_windows import record_window
+    from market_windows import record_window, start_inclusive
     text = record["title"] + " " + record.get("text", "")
     matched = watch_matches(text, watchlist)
     start, timing_markets, timing_resolved = record_window(record, source, start, [w['ticker'] for w in matched])
@@ -334,7 +334,7 @@ def classify_record(record, source, watchlist, start, asof, prior):
             else:
                 return None, "topic_not_matched"
     dt, precision = parse_date(record.get("published"), source.get("timezone", "UTC"))
-    window = within_window(record.get("published", ""), precision, start, asof, source.get("timezone", "UTC"))
+    window = within_window(record.get("published", ""), precision, start, asof, source.get("timezone", "UTC"), start_inclusive(source, timing_markets))
     category = record.get('category') or source.get("category") or (matched[0].get("category") if matched else None) or "Other Strategy"
     if category not in SECTIONS:
         category = "Other Strategy"
@@ -354,7 +354,7 @@ def classify_record(record, source, watchlist, start, asof, prior):
     flags = []
     if not timing_resolved:
         inactive = [m for m in timing_markets if source.get('market_windows', {}).get(m, {}).get('status', 'active') != 'active']
-        flags.append('No active after-close window today for: ' + ', '.join(inactive) + '.' if inactive else
+        flags.append('No active news window yet for: ' + ', '.join(inactive) + '.' if inactive else
                      'Market timing is unresolved; identify the relevant market and apply its close before drafting.')
     flags.append("Newly found document or wording; material novelty versus known deal facts still requires review.")
     if broad:
@@ -404,7 +404,7 @@ def domain_allowed(url, domains):
 def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, report, limit, discovery_log=None):
     """Fetch matched public articles; access failures remain visible review leads."""
     from publisher_extract import extract_publisher_document
-    from market_windows import record_window
+    from market_windows import record_window, start_inclusive
     prepared = []
     fetched = 0
     domains = source.get('allowed_domains') or [urlsplit(source['url']).hostname]
@@ -422,7 +422,7 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
             _, precision = parse_date(lead.get('published', ''), source.get('timezone', 'UTC'))
             entry = dict(title=lead.get('title', ''), url=lead.get('url', ''), source=source['name'], source_id=source['id'],
                          collection_role='market', published=lead.get('published', ''), date_precision=precision,
-                         window_status=within_window(lead.get('published', ''), precision, lead_start, asof, source.get('timezone', 'UTC')),
+                         window_status=within_window(lead.get('published', ''), precision, lead_start, asof, source.get('timezone', 'UTC'), start_inclusive(source, timing_markets)),
                          applied_window_start=lead_start.isoformat(), timing_markets=timing_markets, timing_resolved=timing_resolved,
                          attention_score=scored['attention_score'], attention_reasons=scored['attention_reasons'],
                          priority_matches=[w['ticker'] for w in matches], stage='headline_scanned')
@@ -433,13 +433,13 @@ def expand_publisher_leads(leads, source, watchlist, fetcher, start, asof, repor
     for lead in leads:
         log = audit.get(id(lead))
         discovery_text = lead.get('title', '') + ' ' + lead.get('text', '') + ' ' + lead.get('discovery_snippet', '')
-        lead_start, _, _ = record_window(lead, source, start, [w['ticker'] for w in watch_matches(discovery_text, watchlist)])
+        lead_start, lead_markets, _ = record_window(lead, source, start, [w['ticker'] for w in watch_matches(discovery_text, watchlist)])
         if not broad and not fixed_issuer and not watch_matches(discovery_text, watchlist):
             report['excluded']['discovery_no_name_match'] = report['excluded'].get('discovery_no_name_match', 0) + 1
             continue
         # Official publisher feed dates are usable; search-engine date hints are not.
         dt, precision = parse_date(lead.get('published', ''), source.get('timezone', 'Asia/Tokyo'))
-        if dt is not None and within_window(lead['published'], precision, lead_start, asof, source.get('timezone', 'Asia/Tokyo')) in ('old', 'future'):
+        if dt is not None and within_window(lead['published'], precision, lead_start, asof, source.get('timezone', 'Asia/Tokyo'), start_inclusive(source, lead_markets)) in ('old', 'future'):
             report['excluded']['outside_window'] = report['excluded'].get('outside_window', 0) + 1
             if log is not None:
                 log['stage'] = 'outside_window'
@@ -938,12 +938,15 @@ def render(records, coverage, config, asof, out, historical=False):
     review = []
     if config.get('market_windows') and not historical:
         def window_label(window):
+            if window.get('status') == 'pending_start':
+                return 'Pending today\'s 14:10 SGT start: ' + window.get('expected_start', '')
             if window.get('status') == 'pending_close':
                 return 'Pending today\'s close' + (': ' + window['expected_close'] if window.get('expected_close') else '')
             if window.get('status') == 'no_session':
                 return 'No session today'
-            return window['window_start'] + ' to ' + asof.isoformat()
-        review.append('<h3>News windows by market</h3><ul>' + ''.join(f'<li>{e(m)}: {e(window_label(w))}</li>' for m, w in config['market_windows'].items()) + '</ul><p>Normal weekday schedule with configured holiday/short-session overrides. Pending markets have no eligible afternoon news window.</p>')
+            prefix = 'Strictly after ' if not window.get('start_inclusive', True) else 'From '
+            return prefix + window['window_start'] + ' to ' + asof.isoformat()
+        review.append('<h3>News windows by market</h3><ul>' + ''.join(f'<li>{e(m)}: {e(window_label(w))}</li>' for m, w in config['market_windows'].items()) + '</ul><p>Morning windows follow verified session closes. Afternoon windows require publication strictly after 14:10 Singapore that day and at or before the run cutoff.</p>')
     for c in coverage:
         counts = f'{c.get("discovered", 0)} headlines scanned · {c["articles_attempted"]} articles checked' if 'articles_attempted' in c else f'{c.get("discovered", 0)} source records checked'
         review.append(f'<div class="source"><strong>{e(c["name"])}</strong><span class="pill {e(c["status"])}">{e(c["status"])}</span><p>{c.get("matched", 0)} matches · {counts}</p>')

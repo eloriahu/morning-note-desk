@@ -16,7 +16,7 @@
     "All scanned headlines are retained for AI review. Keyword rankings are provisional.",
     "Current feeds and first pages provide bounded coverage; restricted articles remain leads.",
     "Run the Morning Note Desk skill in Codex to research and write the final email. This collector alone does not perform AI analysis.",
-    "Morning runs use each market's latest completed desk close; Monday morning includes Friday evening and the weekend. Weekday afternoon runs cover only news from that day's close to the run cutoff. A market still open is pending; a market with no session that day has no afternoon window. Neither carries previous-session or weekend news forward. Auto mode treats 12:00 Singapore onward on weekdays as afternoon; `timing_edition` can explicitly select `morning` or `afternoon`. Verify holidays and shortened sessions. Explicit `--hours` selects a rolling window."
+    "Morning runs use each market's latest completed desk close; Monday morning includes Friday evening and the weekend. Every afternoon run covers only information first published strictly after 14:10 SGT on that same date and at or before the run-start cutoff, across all markets and regional news. This applies every day regardless of individual market closes, holidays or shortened sessions. Exclude earlier news, including TOB closures/results; a later recap does not reset the original disclosure time. A run at or before 14:10 has an empty afternoon window. Auto mode treats 12:00 Singapore onward every day as afternoon; `timing_edition` can explicitly select `morning` or `afternoon`. Verify holidays and shortened sessions. Explicit `--hours` selects a rolling window."
   ],
   "sources": [
     {

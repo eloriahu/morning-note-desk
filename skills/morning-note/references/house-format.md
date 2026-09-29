@@ -50,3 +50,5 @@ The copyable distribution email contains the note, index, sourced stories and op
 The composer discovers `<workspace>/morning-note/house-style.json`, or accepts `--style <path>`. Relative `logo_path` resolves against the style file. Supported template values include `name`, `title`, `region`, `subtitle`, `contact_email`, `logo_path`, `logo_width` and optional `footer` text/groups. Reproduce supplied text; do not invent new contacts or licensing claims.
 
 Keep local style files, logo assets, reference messages and contact information outside the plugin and all sharing bundles. Only this generic specification and formatter belong in the portable plugin.
+
+Optional private `house-style.json` may contain `headline_aliases`, mapping exact names to display labels. The composer applies these aliases to headline text in both index and details; body facts and citations remain intact. Keep actual name mappings in the local style file, never in shared fixtures or the plugin.

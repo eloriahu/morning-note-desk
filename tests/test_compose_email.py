@@ -62,27 +62,24 @@ class ComposerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             composer.validate_pack(pack)
 
-    def test_every_market_enforces_its_own_source_timestamp(self):
-        # Independently specified desk cutoffs ensure a wide regional envelope
-        # never admits an older company story for any configured market.
-        expected = {'JP': '14:30:00', 'KR': '14:30:00', 'AU': '14:15:00',
-                    'HK': '16:10:00', 'CH': '15:00:00', 'TT': '13:30:00',
-                    'NZ': '12:00:30', 'SP': '17:16:00', 'IN': '18:00:00',
-                    'MK': '17:00:00', 'IJ': '17:15:00', 'TB': '17:40:00',
-                    'PM': '15:15:00', 'VN': '16:00:00'}
-        asof = datetime.fromisoformat('2026-09-29T19:00:00+08:00')
+    def test_every_market_enforces_strict_afternoon_source_timestamp(self):
+        asof = datetime.fromisoformat('2026-09-29T16:00:00+08:00')
         windows, start = composer.windows.build_windows(dict(timing_mode='market_close'), asof)
-        self.assertEqual(set(windows) - {'GLOBAL'}, set(expected))
-        for market, clock in expected.items():
-            for seconds, ready in [(-1, 0), (0, 1), (1, 1)]:
-                with self.subTest(market=market, seconds=seconds):
+        for market in windows:
+            for published, ready in [('2026-09-28T23:00:00+08:00', 0),
+                                     ('2026-09-29T14:09:59+08:00', 0),
+                                     ('2026-09-29T14:10:00+08:00', 0),
+                                     ('2026-09-29T06:10:00+00:00', 0),
+                                     ('2026-09-29T14:10:01+08:00', 1),
+                                     ('2026-09-29T16:00:00+08:00', 1),
+                                     ('2026-09-29T16:00:01+08:00', 0)]:
+                with self.subTest(market=market, published=published):
                     pack = example_pack()
                     pack.update(timing_mode='market_close', market_windows=windows,
                                 window_start=start.isoformat(), as_of=asof.isoformat())
                     story = pack['stories'][0]
-                    story['tickers'] = [f'TEST {market} Equity']
-                    cutoff = datetime.fromisoformat(f'2026-09-29T{clock}+08:00')
-                    story['sources'][0]['published_at'] = (cutoff + timedelta(seconds=seconds)).isoformat()
+                    story['market'] = market
+                    story['sources'][0]['published_at'] = published
                     self.assertEqual(composer.validate_pack(pack)['composition']['ready_count'], ready)
 
     def test_ready_sourced_story_becomes_unsent_eml_without_recipients(self):
@@ -97,28 +94,40 @@ class ComposerTests(unittest.TestCase):
             self.assertIn("Synthetic sourced statement", message.get_body(preferencelist=("plain",)).get_content())
             self.assertEqual({p.name for p in Path(temp).iterdir()}, {"email.html", "morning-note.txt", "morning-note.eml", "review.html", "research.json"})
 
-    def test_afternoon_holds_pending_markets_and_shows_status_in_editor(self):
-        asof = datetime.fromisoformat('2026-09-28T16:02:59+08:00')
+    def test_afternoon_before_floor_is_empty_and_shows_pending_start(self):
+        asof = datetime.fromisoformat('2026-09-28T14:00:00+08:00')
         windows, start = composer.windows.build_windows(dict(timing_mode='market_close'), asof)
         pack = example_pack()
         pack.update(timing_mode='market_close', market_windows=windows,
                     window_start=start.isoformat(), as_of=asof.isoformat())
         story = pack['stories'][0]
         story['market'] = 'HK'
-        for published in ['2026-09-25T21:56:00+08:00', asof.isoformat()]:
-            story['sources'][0]['published_at'] = published
-            checked = composer.validate_pack(pack)
-            self.assertEqual(checked['composition']['ready_count'], 0)
-            self.assertIn('pending today', ' '.join(checked['stories'][0]['composition_reasons']))
+        story['sources'][0]['published_at'] = asof.isoformat()
+        self.assertEqual(composer.validate_pack(pack)['composition']['ready_count'], 0)
         with tempfile.TemporaryDirectory() as temp:
             composer.compose(pack, temp)
             review = (Path(temp) / 'review.html').read_text(encoding='utf-8')
-            self.assertIn('Pending today&#x27;s close: 2026-09-28T16:10:00+08:00', review)
+            self.assertIn('14:10 SGT start', review)
             self.assertNotIn('Synthetic sourced statement', (Path(temp) / 'email.html').read_text(encoding='utf-8'))
-        pack['market_windows']['HK']['status'] = 'no_session'
-        checked = composer.validate_pack(pack)
-        self.assertEqual(checked['composition']['ready_count'], 0)
-        self.assertIn('no session today', ' '.join(checked['stories'][0]['composition_reasons']))
+
+    def test_private_headline_alias_applies_to_index_and_details_only(self):
+        pack = example_pack()
+        pack['stories'][0]['headline'] = 'Example Investor increases stake'
+        pack['stories'][0]['bullets'][0]['text'] = 'Example Investor increased its stake.'
+        pack['top_stories'] = ['test-1']
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            style = root / 'house-style.json'
+            style.write_text(json.dumps({'headline_aliases': {'Example Investor': 'Activist'}}), encoding='utf-8')
+            output = root / 'email'
+            composer.compose(pack, output, style)
+            plain = (output / 'morning-note.txt').read_text(encoding='utf-8')
+            self.assertEqual(plain.count('Activist increases stake'), 3)
+            self.assertNotIn('Example Investor increases stake', plain)
+            self.assertIn('* Example Investor increased its stake.', plain)
+            self.assertEqual(pack['stories'][0]['headline'], 'Example Investor increases stake')
+        with self.assertRaises(ValueError):
+            composer.apply_headline_aliases(pack, {'headline_aliases': {'': 'Activist'}})
 
     def test_background_and_unconfirmed_novelty_are_held_even_if_source_is_fresh(self):
         for novelty in ("background", "unconfirmed"):

@@ -16,6 +16,7 @@ from html import escape
 import ipaddress
 import importlib.util
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -93,6 +94,7 @@ def validate_pack(pack):
         raise ValueError('Market-close timing requires market_windows from the collection or verified session calendar')
     starts = {}
     statuses = {}
+    inclusivity = {}
     for market, window in market_windows.items():
         code = windows.market_code(market)
         if code in starts or not isinstance(window, dict):
@@ -104,9 +106,13 @@ def validate_pack(pack):
             raise ValueError('Market window cutoff differs from the edition cutoff')
         starts[code] = market_start
         status = window.get('status', 'active')
-        if status not in ('active', 'pending_close', 'no_session'):
+        if status not in ('active', 'pending_start', 'pending_close', 'no_session'):
             raise ValueError('Invalid market window status')
         statuses[code] = status
+        inclusive = window.get('start_inclusive', True)
+        if not isinstance(inclusive, bool):
+            raise ValueError('start_inclusive must be a boolean')
+        inclusivity[code] = inclusive
     stories = result.get("stories", [])
     if not isinstance(stories, list) or not all(isinstance(story, dict) for story in stories):
         raise ValueError("stories must be a list of story objects")
@@ -114,15 +120,19 @@ def validate_pack(pack):
     for story in stories:
         reasons = []
         story_start = start
+        story_start_inclusive = True
         if market_mode:
             markets = windows.infer_markets(story, {})
             if not markets or any(m not in starts for m in markets):
                 reasons.append('The relevant market and its close window must be established.')
             else:
                 story_start = max(starts[m] for m in markets)
+                story_start_inclusive = all(inclusivity[m] for m in markets if starts[m] == story_start)
                 story['timing_markets'] = markets
                 for market in markets:
-                    if statuses[market] == 'pending_close':
+                    if statuses[market] == 'pending_start':
+                        reasons.append(f'{market}: pending today\'s 14:10 SGT start; no afternoon news is eligible yet.')
+                    elif statuses[market] == 'pending_close':
                         reasons.append(f'{market}: pending today\'s close; afternoon coverage cannot use an earlier session.')
                     elif statuses[market] == 'no_session':
                         reasons.append(f'{market}: no session today; no after-close window for this afternoon edition.')
@@ -180,7 +190,7 @@ def validate_pack(pack):
                     reasons.append(f"Bullet {number} source publication time is unconfirmed.")
                 try:
                     published = timestamp(source.get("published_at"))
-                    if not story_start <= published <= as_of:
+                    if published > as_of or published < story_start or (published == story_start and not story_start_inclusive):
                         reasons.append(f"Bullet {number} source is outside the selected time window.")
                 except (ValueError, TypeError):
                     reasons.append(f"Bullet {number} source needs an ISO publication timestamp with timezone.")
@@ -214,7 +224,7 @@ def load_branding(style_path):
     data = json.loads(style_path.read_text(encoding='utf-8-sig'))
     if not isinstance(data, dict):
         raise ValueError('House style must be a JSON object')
-    branding = {key: data[key] for key in ('title', 'region', 'subtitle', 'contact_email', 'footer') if key in data}
+    branding = {key: data[key] for key in ('title', 'region', 'subtitle', 'contact_email', 'footer', 'headline_aliases') if key in data}
     attachment = None
     if data.get('logo_path'):
         logo = (style_path.parent / data['logo_path']).resolve()
@@ -345,12 +355,14 @@ def review_page(pack, body, subject, attachment=None):
     market_table = ''
     if pack.get('market_windows'):
         def window_label(window):
+            if window.get('status') == 'pending_start':
+                return 'Pending today\'s 14:10 SGT start: ' + window.get('expected_start', '')
             if window.get('status') == 'pending_close':
                 return 'Pending today\'s close' + (': ' + window['expected_close'] if window.get('expected_close') else '')
             if window.get('status') == 'no_session':
                 return 'No session today'
-            return window['window_start']
-        market_table = '<h2>News windows by market</h2><table><tr><th>Market</th><th>Start (inclusive) / status</th></tr>' + ''.join('<tr><td>' + esc(m) + '</td><td>' + esc(window_label(w)) + '</td></tr>' for m, w in pack['market_windows'].items()) + '</table><p>Each active window ends at the edition cutoff. Pending or closed-for-the-day markets have no eligible afternoon news window. Check exchange holidays and special sessions against the research record.</p>'
+            return ('Strictly after ' if not window.get('start_inclusive', True) else 'From ') + window['window_start']
+        market_table = '<h2>News windows by market</h2><table><tr><th>Market</th><th>Start / status</th></tr>' + ''.join('<tr><td>' + esc(m) + '</td><td>' + esc(window_label(w)) + '</td></tr>' for m, w in pack['market_windows'].items()) + '</table><p>Each active window ends at the edition cutoff. Afternoon publication times must be strictly after 14:10 Singapore that day. Morning windows follow verified exchange sessions.</p>'
     output = ['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
               f'<title>{esc(subject)} — review</title><style>{STYLE}</style></head><body><main>',
               '<section class="notice"><h1>Review your morning email</h1><p>Codex researched and drafted this pack. '
@@ -386,9 +398,26 @@ def review_page(pack, body, subject, attachment=None):
     return "".join(output)
 
 
+def apply_headline_aliases(pack, branding):
+    """Apply explicit private display aliases to headlines, leaving source/body facts intact."""
+    if not isinstance(pack, dict):
+        raise ValueError('Research pack must be a JSON object')
+    result = deepcopy(pack)
+    aliases = branding.get('headline_aliases', {})
+    if not isinstance(aliases, dict) or any(not isinstance(k, str) or not k.strip() or not isinstance(v, str) or not v.strip() for k, v in aliases.items()):
+        raise ValueError('headline_aliases must map nonempty names to nonempty display labels')
+    if aliases:
+        mapping = {name.casefold(): label for name, label in aliases.items()}
+        pattern = re.compile(r'(?<!\w)(?:' + '|'.join(re.escape(name) for name in sorted(aliases, key=len, reverse=True)) + r')(?!\w)', re.I)
+        for story in result.get('stories', []):
+            if isinstance(story, dict) and isinstance(story.get('headline'), str):
+                story['headline'] = pattern.sub(lambda match: mapping[match.group().casefold()], story['headline'])
+    return result
+
+
 def compose(pack, output_dir, style_path=None):
-    validated = validate_pack(pack)
     branding, attachment = load_branding(style_path)
+    validated = validate_pack(apply_headline_aliases(pack, branding))
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     subject = " ".join(text(validated.get("title") or "Asia-Pacific Morning Note").splitlines()).strip()
