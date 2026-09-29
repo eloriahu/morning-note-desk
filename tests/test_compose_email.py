@@ -25,6 +25,10 @@ def example_pack():
                          "bullets": [{"text": "Synthetic sourced statement.", "source_urls": ["https://example.com/source"]}],
                          "sources": [{"url": "https://example.com/source", "name": "Example source",
                                       "published_at": "2026-09-24T06:00:00+08:00", "access": "readable", "date_precision": "time"}],
+                         "origin": {"source_url": "https://example.com/source", "kind": "exchange", "status": "verified",
+                                    "development": "Synthetic announcement of a new offer.",
+                                    "timestamp_evidence": "Synthetic exchange release timestamp with timezone.",
+                                    "verification_notes": "Synthetic fixture: issuer and earlier reporting checked; this is the first release."},
                          "novelty": "new", "review_status": "ready", "review_notes": []}]}
 
 

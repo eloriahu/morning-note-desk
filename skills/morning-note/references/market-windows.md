@@ -1,5 +1,7 @@
 # News timing by market
 
+Timing eligibility must be established from the **first disclosure of the specific development**, following [original-source timing](original-source-timing.md). A later media story cannot qualify a pre-window announcement. Record and validate the original source/time as well as any cited article times.
+
 The default is `timing_mode: "market_close"`. Apply it to every market in the requested universe. Morning runs use each market's latest completed desk close; Monday morning includes Friday evening and the weekend. Every afternoon run covers only information first published strictly after 14:10 SGT on that same date and at or before the run-start cutoff, across all markets and regional news. This applies every day regardless of individual market closes, holidays or shortened sessions. Exclude earlier news, including TOB closures/results; a later recap does not reset the original disclosure time. A run at or before 14:10 has an empty afternoon window. Auto mode treats 12:00 Singapore onward every day as afternoon; `timing_edition` can explicitly select `morning` or `afternoon`. Verify holidays and shortened sessions. Explicit `--hours` selects a rolling window. Morning windows include releases timestamped exactly at the relevant close; afternoon windows exclude 14:10:00 itself. Convert source timestamps to the same instant before comparing. The run cutoff never advances while research is underway.
 
 The following market-close cutoffs apply to morning editions only and are defined in `collector/market_windows.py`:

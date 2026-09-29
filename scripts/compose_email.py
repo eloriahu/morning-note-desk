@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import base64
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email import policy
 from email.message import EmailMessage
 from email.utils import format_datetime
@@ -77,6 +77,57 @@ def _strings(value):
     return [text(item) for item in value] if isinstance(value, list) else ([text(value)] if value else [])
 
 
+def validate_origin(story, source_by_url, start, as_of, inclusive):
+    """Check recorded first-disclosure evidence; research must establish its truth."""
+    story.pop('original_published_at', None)
+    story.pop('original_published_at_sgt', None)
+    origin = story.get('origin')
+    if not isinstance(origin, dict):
+        return ['Original disclosure and its publication time have not been verified.']
+    reasons = []
+    if origin.get('status') != 'verified':
+        reasons.append('Original disclosure verification is incomplete.')
+    if origin.get('kind') not in ('exchange', 'issuer', 'regulator', 'original_reporting'):
+        reasons.append('Original source must be an exchange, issuer, regulator or original reporting.')
+    for field in ('development', 'timestamp_evidence', 'verification_notes'):
+        if not isinstance(origin.get(field), str) or not origin[field].strip():
+            reasons.append(f'Original disclosure needs {field}.')
+    url = origin.get('source_url')
+    source = source_by_url.get(url) if isinstance(url, str) else None
+    if source is None:
+        return reasons + ['Original source URL must match a public source in this story.']
+    if source.get('access') != 'readable' or source.get('date_precision') != 'time':
+        reasons.append('Original source must be read and its exact publication time confirmed.')
+    try:
+        published = timestamp(source.get('published_at'))
+    except (ValueError, TypeError):
+        return reasons + ['Original source needs an ISO publication timestamp with timezone.']
+    story['original_published_at'] = source['published_at']
+    story['original_published_at_sgt'] = published.astimezone(timezone(timedelta(hours=8))).isoformat()
+    if published > as_of or published < start or (published == start and not inclusive):
+        reasons.append('Original disclosure is outside the selected time window; later reporting cannot reset it.')
+    for other_url, other in source_by_url.items():
+        if other_url == url:
+            continue
+        relationship = other.get('relationship', 'same_development')
+        if relationship == 'background':
+            if not isinstance(other.get('context_notes'), str) or not other['context_notes'].strip():
+                reasons.append('Background sources need context_notes distinguishing the older event from this development.')
+            continue
+        if relationship != 'same_development':
+            reasons.append('Source relationship must be same_development or background.')
+            continue
+        try:
+            other_time = timestamp(other.get('published_at'))
+            if other.get('date_precision') != 'time':
+                raise ValueError('Unconfirmed time')
+            if other_time < published:
+                reasons.append('An earlier report of the same development is recorded; verify and use the original source.')
+        except (ValueError, TypeError):
+            reasons.append('A report of the same development has an unconfirmed publication time; resolve the chronology.')
+    return reasons
+
+
 def validate_pack(pack):
     """Return a copy with composition_status/reasons on every input story."""
     if not isinstance(pack, dict):
@@ -137,6 +188,7 @@ def validate_pack(pack):
                     elif statuses[market] == 'no_session':
                         reasons.append(f'{market}: no session today; no after-close window for this afternoon edition.')
         story['applied_window_start'] = story_start.isoformat()
+        story['applied_start_inclusive'] = story_start_inclusive
         if not isinstance(story.get("id"), str) or not story["id"].strip():
             reasons.append("Story ID is missing.")
         elif ids.count(story["id"]) > 1:
@@ -164,10 +216,17 @@ def validate_pack(pack):
             if url in source_by_url:
                 reasons.append("A source URL is duplicated; consolidate its metadata.")
             source_by_url[url] = source
+        reasons.extend(validate_origin(story, source_by_url, story_start, as_of, story_start_inclusive))
         bullets = story.get("bullets", [])
         if not isinstance(bullets, list) or not bullets:
             bullets = []
             reasons.append("At least one sourced English bullet is required.")
+        cited_urls = {url for bullet in bullets if isinstance(bullet, dict)
+                      for url in (bullet.get('source_urls') if isinstance(bullet.get('source_urls'), list) else [])
+                      if isinstance(url, str)}
+        origin = story.get('origin')
+        if isinstance(origin, dict) and isinstance(origin.get('source_url'), str) and origin['source_url'] not in cited_urls:
+            reasons.append('The original disclosure must be cited by a factual bullet.')
         for number, bullet in enumerate(bullets, 1):
             if not isinstance(bullet, dict) or not isinstance(bullet.get("text"), str) or not bullet["text"].strip():
                 reasons.append(f"Bullet {number} has no text.")
@@ -199,7 +258,7 @@ def validate_pack(pack):
     result["composition"] = {
         "ready_count": sum(story["composition_status"] == "ready" for story in stories),
         "held_count": sum(story["composition_status"] == "hold" for story in stories),
-        "validation_scope": "Structural checks only. Codex research and an editor must verify identity, factual support, novelty, relevance and English wording.",
+        "validation_scope": "Structural checks only. Codex research and an editor must verify first-disclosure provenance, identity, factual support, novelty, relevance and English wording.",
     }
     return result
 
@@ -350,6 +409,24 @@ def calendar_review(pack):
     return '<section class="notice"><h2>Upcoming catalysts — editor only</h2><p>Calendar reminders are separate from new developments. Verify the source and current event status before using a date in the email.</p><table style="width:100%;text-align:left;font-size:13px"><thead><tr><th>Date / timezone</th><th>Event</th><th>Timing / status</th><th>Evidence</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table></section>'
 
 
+def origin_review(pack):
+    output = ['<section class="notice"><h2>Original disclosure audit — editor only</h2>',
+              '<p>Eligibility uses the original release time, not a later recap or page update. '
+              'Research must verify the recorded chronology.</p>']
+    for story in pack.get('stories', []):
+        origin = story.get('origin') if isinstance(story.get('origin'), dict) else {}
+        output.append('<article><h3>' + esc(story.get('headline') or story.get('id')) + '</h3>')
+        output.append('<p>Status: ' + esc(story.get('composition_status')) + '; original-source check: ' + esc(origin.get('status') or 'missing') + '</p>')
+        output.append('<p>Original publication: ' + esc(story.get('original_published_at') or 'unverified')
+                      + '; Singapore: ' + esc(story.get('original_published_at_sgt') or 'unverified') + '</p>')
+        if safe_url(origin.get('source_url')):
+            output.append('<p><a href="' + esc(origin['source_url']) + '" target="_blank" rel="noopener noreferrer">Original source (' + esc(origin.get('kind')) + ')</a></p>')
+        for label, field in [('Development', 'development'), ('Timestamp evidence', 'timestamp_evidence'), ('Chronology checks', 'verification_notes')]:
+            output.append('<p>' + label + ': ' + esc(origin.get(field) or 'not recorded') + '</p>')
+        output.append('</article>')
+    return ''.join(output) + '</section>'
+
+
 def review_page(pack, body, subject, attachment=None):
     held = [story for story in pack.get("stories", []) if story["composition_status"] == "hold"]
     market_table = ''
@@ -366,8 +443,8 @@ def review_page(pack, body, subject, attachment=None):
     output = ['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
               f'<title>{esc(subject)} — review</title><style>{STYLE}</style></head><body><main>',
               '<section class="notice"><h1>Review your morning email</h1><p>Codex researched and drafted this pack. '
-              'The composer checked citation links, source access, timestamps and required fields. '
-              'An editor must still check factual support, company identity, novelty and English wording.</p>',
+              'The composer checked citation links, source access, original-disclosure timestamps and required fields. '
+              'An editor must still verify the original source, factual support, company identity, novelty and English wording.</p>',
               f'<p class="status">{pack["composition"]["ready_count"]} draft stories · {len(held)} held for research/review. No email has been sent.</p>',
               f'<p class="status">Research window: {esc(pack["window_start"])} to {esc(pack["as_of"])}. AI-generated draft; review before sending.</p>{market_table}</section>',
               '<div class="toolbar"><label>Subject<input id="subject" type="text" value="' + esc(subject) + '"></label>',
@@ -387,6 +464,7 @@ def review_page(pack, body, subject, attachment=None):
                 output.append('<p><a href="' + esc(source["url"]) + '" target="_blank" rel="noopener noreferrer">' + esc(source.get("name") or "Read source") + '</a></p>')
         output.append('</article>')
     output.append('</section>')
+    output.append(origin_review(pack))
     if pack.get('coverage'):
         output.append('<section class="notice"><h2>Coverage notes — editor only</h2><ul>' + ''.join('<li>' + esc(note) + '</li>' for note in _strings(pack['coverage'])) + '</ul></section>')
     output.append(calendar_review(pack))

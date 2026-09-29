@@ -24,6 +24,8 @@ If the headline audit is empty because sources failed, label it as a coverage ou
 
 The collector's automatically assembled headline/excerpt email is **not the finished AI-researched email**. Produce a separate researched pack and pass it to the composer.
 
+Before composition, follow [original-source timing](original-source-timing.md): trace every selected development to its first public disclosure, including sources before the collection window. Record the mandatory `origin` fields from [the schema](draft-schema.md). Collector timestamps are discovery metadata; an in-window media item does not establish that the original announcement was in-window. Missing or unresolved origin evidence stays held.
+
 ## Create the finished draft
 
 Save the AI-authored pack at `<workspace>/morning-note-runs/<run>/research.json`, then run:

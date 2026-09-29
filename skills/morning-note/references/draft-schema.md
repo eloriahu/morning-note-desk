@@ -8,7 +8,7 @@ Save UTF-8 JSON with these fields:
 | --- | --- |
 | `title` | Email subject; the masthead uses the local house title when configured. |
 | `as_of` | Edition cutoff: full ISO timestamp with timezone, such as `2026-09-24T08:00:00+08:00`. |
-| `window_start` | Inclusive start of the research window, using the same full timestamp format. |
+| `window_start` | Earliest collection envelope, using the same full timestamp format. Inclusive for explicit rolling windows; per-market `start_inclusive` determines the actual boundary in market timing. |
 | `timing_mode` | Use `market_close` for the default workflow, or `rolling_hours` for an explicit hours override. |
 | `market_windows` | In market-close mode, copy the verified per-market map from collection: each market has `window_start`, `as_of`, `status` (`active` or `pending_start`), `edition`, `start_inclusive`, and session-date/basis notes. Preserve `expected_start` for a pending afternoon window. Afternoon starts are strictly exclusive; morning starts remain inclusive. Inactive entries are empty windows and cannot supply email stories. The top-level `window_start` is only the earliest collection envelope. See [market timing](market-windows.md). |
 | `stories` | Array of researched story objects described below. Include held candidates as well as ready stories. |
@@ -29,17 +29,37 @@ Each story has:
 | `headline` | Short English headline supported by the cited evidence. |
 | `bullets` | One or more objects with `text` (concise English synthesis) and `source_urls` (array of exact URLs present in this story's `sources`). Every bullet needs citations. |
 | `sources` | Array of objects with `url`, `name`, `published_at`, `access`, and `date_precision`. Use the actual publication time; never substitute retrieval time, a search-result date or modified time for the article's publication. |
+| `origin` | Required first-disclosure record for this specific development: `source_url`, `kind`, `status`, `development`, `timestamp_evidence`, and `verification_notes`, as specified below. Missing or unresolved provenance holds the story. |
 | `novelty` | `new`, `changed`, `background`, or `unconfirmed`. Judge the actual information, not just a fresh page timestamp. |
 | `review_status` | `ready` only after Codex's research checks; otherwise `hold`. Ready remains an editor-review draft, not a send instruction. |
 | `review_notes` | Array of unresolved questions or useful editorial notes. Material unresolved claims require `hold`. |
 
-Source `access` is `readable` only when the relevant public text was actually available and supports the claim. Use `restricted` for inaccessible or headline-only evidence; never infer an article's contents from a search snippet. Source `date_precision` is `time` for a confirmed full publication timestamp or `day` if only the date is known. Dates with only day precision stay held. Additional fields may be retained for provenance, but do not alter the gates.
+Source `access` is `readable` only when the relevant public text was actually available and supports the claim. Use `restricted` for inaccessible or headline-only evidence; never infer an article's contents from a search snippet. Source `date_precision` is `time` for a confirmed full publication timestamp or `day` if only the date is known. Dates with only day precision stay held.
 
-To publish a story into the draft, the composer requires a known company, a unique ID, a headline, a supported category, `review_status: "ready"`, `novelty: "new"` or `"changed"`, and at least one nonempty cited bullet. **Every cited source** must be readable, have `date_precision: "time"`, and have a timezone-aware publication timestamp within `[window_start, as_of]`. All citation URLs must match that story's source list. Unsafe URLs, duplicate source URLs, restricted sources, old/future evidence and missing citation metadata hold the entire story. An older document can remain as uncited context in `sources`; if a bullet depends on it, split the current update from historical context or hold the unsupported update.
+## Required original disclosure record
 
-Structural validation does not prove that English wording is accurate, that a source supports a bullet, that a company/ticker mapping is right, or that a story is new. Codex must complete those checks before marking a story ready. The user reviews the resulting email.
+Apply [original-source timing](original-source-timing.md) before marking an origin verified. Each story represents one independently timed development.
 
-In `market_close` mode, every cited publication must fall inside the story's applicable market window, not merely the overall envelope. Missing market/window mappings hold the story. The editor displays market windows and stores each story's `applied_window_start`; these fields do not appear in the distribution email. Older packs without market timing remain compatible with their explicit global window.
+| `origin` field | Required meaning |
+| --- | --- |
+| `source_url` | Exact URL of the original disclosure in this story's `sources`. A factual bullet must cite it. |
+| `kind` | `exchange`, `issuer`, `regulator` or `original_reporting`. A later recap is not an original source. |
+| `status` | `verified` only after reading the original and checking its chronology; otherwise `unconfirmed`. |
+| `development` | The specific new fact or material change whose first disclosure is being timed. |
+| `timestamp_evidence` | Where the original release time and timezone were verified, including the native timestamp/label and exchange index URL if needed. A generic page update date is insufficient. |
+| `verification_notes` | Sources and earlier reporting actually checked, attribution chain and why this is the first disclosure of this development. Do not claim a check that was not performed. |
+
+The original's native timestamp is its source object's `published_at`. The composer derives `original_published_at` and `original_published_at_sgt`; do not independently invent or maintain a second timestamp. It also records `applied_window_start`, `applied_start_inclusive` and the composition decision. These fields and the original-source audit appear in the review page/research pack, outside the distribution email.
+
+Other sources default to `relationship: "same_development"`. Keep known earlier reports in the record. An earlier same-development timestamp holds the story until the actual origin is selected; an unconfirmed time holds the chronology for review. For an older, genuinely different event, explicitly set `relationship: "background"` and give `context_notes` explaining how it differs from the current development. Never relabel an earlier report of the same fact as background to pass the gate. Historical deal terms can be background to a newly announced price increase, for example.
+
+## Draft eligibility
+
+To publish a story into the draft, the composer requires a known company, a unique ID, a headline, a supported category, `review_status: "ready"`, `novelty: "new"` or `"changed"`, a verified `origin` record, and at least one nonempty cited bullet. **The original disclosure and every cited source** must be readable, have `date_precision: "time"`, and have a timezone-aware publication timestamp inside the applicable window. Afternoon uses `(14:10 SGT, as_of]`; morning/explicit rolling windows use an inclusive start unless specified otherwise. All citation URLs must match that story's source list. Unsafe URLs, duplicate source URLs, restricted sources, old/future evidence, missing citation metadata and missing origin verification hold the entire story. An older document can remain as explicitly labelled uncited background; if a bullet depends on it, split the current update from historical context or hold the unsupported update. A later media or exchange publication cannot make an older original eligible.
+
+Structural validation does not prove that the earliest disclosure has actually been found, that English wording is accurate, that a source supports a bullet, that a company/ticker mapping is right, or that a story is new. Codex must complete those checks before marking a story ready. The user reviews the resulting email.
+
+In `market_close` mode, the original disclosure and every cited publication must fall inside the story's applicable market window, not merely the overall envelope. Missing market/window mappings hold the story. Older packs without market timing retain their explicit global window, but their stories now stay held until original-disclosure evidence is supplied. Do not auto-populate verified origin metadata from the first listed or newest source. Existing saved drafts are not rewritten.
 
 This deliberately incomplete example demonstrates a **held workflow item**, not a financial claim or a real news event:
 
