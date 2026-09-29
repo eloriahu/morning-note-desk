@@ -16,7 +16,7 @@
     "All scanned headlines are retained for AI review. Keyword rankings are provisional.",
     "Current feeds and first pages provide bounded coverage; restricted articles remain leads.",
     "Run the Morning Note Desk skill in Codex to research and write the final email. This collector alone does not perform AI analysis.",
-    "Default news windows begin at each market's latest completed desk close; verify holidays and special sessions. Explicit --hours selects a rolling window."
+    "Morning runs use each market's latest completed desk close; Monday morning includes Friday evening and the weekend. Weekday afternoon runs cover only news from that day's close to the run cutoff. A market still open is pending; a market with no session that day has no afternoon window. Neither carries previous-session or weekend news forward. Auto mode treats 12:00 Singapore onward on weekdays as afternoon; `timing_edition` can explicitly select `morning` or `afternoon`. Verify holidays and shortened sessions. Explicit `--hours` selects a rolling window."
   ],
   "sources": [
     {
@@ -361,5 +361,7 @@
       "coverage_note": "Public English title search, up to 1,000 rows per day in the selected window. Reports remaining rows; Chinese-only filings need supplemental research."
     }
   ],
-  "timing_mode": "market_close"
+  "timing_mode": "market_close",
+  "timing_edition": "auto",
+  "afternoon_start": "12:00"
 }

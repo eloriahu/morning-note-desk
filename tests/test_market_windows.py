@@ -23,13 +23,21 @@ class MarketWindowTests(unittest.TestCase):
         windows, start = build_windows(config, asof)
         return asof, windows, start
 
-    def test_monday_afternoon_uses_each_completed_close(self):
-        _, windows, _ = self.windows()
+    def test_monday_afternoon_has_no_previous_session_fallback(self):
+        asof, windows, start = self.windows()
         self.assertEqual(set(self.SGT_CLOSES), set(DEFAULT_CLOSES))
         for market, clock in self.SGT_CLOSES.items():
-            day = '2026-09-28' if clock <= '16:00:00' else '2026-09-25'
             with self.subTest(market=market):
-                self.assertEqual(windows[market]['window_start'], f'{day}T{clock}+08:00')
+                self.assertEqual(windows[market]['session_date'], '2026-09-28')
+                if clock <= '16:00:00':
+                    self.assertEqual(windows[market]['status'], 'active')
+                    self.assertEqual(windows[market]['window_start'], f'2026-09-28T{clock}+08:00')
+                else:
+                    self.assertEqual(windows[market]['status'], 'pending_close')
+                    self.assertEqual(windows[market]['window_start'], asof.isoformat())
+                    self.assertEqual(windows[market]['expected_close'], f'2026-09-28T{clock}+08:00')
+        self.assertEqual(start.date(), asof.date())
+        self.assertEqual(windows['GLOBAL']['window_start'], start.isoformat())
 
     def test_monday_morning_and_weekend_use_friday_close(self):
         for when in ['2026-09-28T08:00:00+08:00', '2026-09-27T16:00:00+08:00']:
@@ -42,10 +50,11 @@ class MarketWindowTests(unittest.TestCase):
     def test_before_at_and_after_close_boundaries(self):
         for market, clock in self.SGT_CLOSES.items():
             cutoff = datetime.fromisoformat(f'2026-09-29T{clock}+08:00')
-            for seconds, day in [(-1, '2026-09-28'), (0, '2026-09-29'), (1, '2026-09-29')]:
+            for seconds, status in [(-1, 'pending_close'), (0, 'active'), (1, 'active')]:
                 with self.subTest(market=market, seconds=seconds):
                     _, windows, _ = self.windows((cutoff + timedelta(seconds=seconds)).isoformat())
-                    self.assertEqual(windows[market]['session_date'], day)
+                    self.assertEqual(windows[market]['session_date'], '2026-09-29')
+                    self.assertEqual(windows[market]['status'], status)
 
     def test_fixed_au_sgt_cutoff_and_new_zealand_dst(self):
         _, before, _ = self.windows('2026-09-25T16:00:00+08:00')
@@ -57,8 +66,41 @@ class MarketWindowTests(unittest.TestCase):
     def test_explicit_holiday_and_short_session_overrides(self):
         _, windows, _ = self.windows(market_close_rules={'JP': {'sessions': {'2026-09-28': None}},
                                                         'HK': {'sessions': {'2026-09-28': '12:10'}}})
-        self.assertEqual(windows['JP']['session_date'], '2026-09-25')
+        self.assertEqual(windows['JP']['session_date'], '2026-09-28')
+        self.assertEqual(windows['JP']['status'], 'no_session')
+        self.assertEqual(windows['HK']['status'], 'active')
         self.assertEqual(windows['HK']['window_start'], '2026-09-28T12:10:00+08:00')
+
+    def test_morning_holiday_keeps_latest_completed_session(self):
+        _, windows, _ = self.windows('2026-09-28T05:00:00+08:00',
+            market_close_rules={'JP': {'sessions': {'2026-09-25': None}}})
+        self.assertEqual(windows['JP']['session_date'], '2026-09-24')
+
+    def test_afternoon_before_any_close_has_empty_global_window(self):
+        asof, windows, start = self.windows('2026-09-28T12:00:00+08:00')
+        self.assertEqual(start, asof)
+        self.assertTrue(all(w['status'] == 'pending_close' for w in windows.values()))
+
+    def test_edition_override_and_configurable_afternoon_boundary(self):
+        _, windows, _ = self.windows(timing_edition='morning')
+        self.assertEqual(windows['HK']['session_date'], '2026-09-25')
+        _, windows, _ = self.windows('2026-09-28T13:00:00+08:00', afternoon_start='14:00')
+        self.assertEqual(windows['HK']['session_date'], '2026-09-25')
+        with self.assertRaises(ValueError):
+            self.windows(timing_edition='unknown')
+
+    def test_pending_and_holiday_markets_never_become_collector_eligible(self):
+        for extra in ({}, {'market_close_rules': {'HK': {'sessions': {'2026-09-28': None}}}}):
+            asof, windows, start = self.windows(**extra)
+            watch = [dict(ticker='TEST HK', name='Example Company', aliases=[])]
+            source = dict(id='test', name='Test', timezone='Asia/Hong_Kong', language='en', market_windows=windows)
+            # Even an exact-cutoff release cannot enter an inactive market window.
+            row = dict(title='Example Company update', text='Synthetic fact', url='https://example.com/a', published=asof.isoformat())
+            candidate, _ = classify_record(row, source, watch, start, asof, {})
+            self.assertFalse(candidate['eligible'])
+            row['published'] = '2026-09-25T21:56:00+08:00'
+            candidate, _ = classify_record(row, source, watch, start, asof, {})
+            self.assertIsNone(candidate)
 
     def test_explicit_rolling_hours_preserved(self):
         asof = datetime.fromisoformat('2026-09-28T16:00:00+08:00')
@@ -73,7 +115,7 @@ class MarketWindowTests(unittest.TestCase):
         self.assertEqual(applied.isoformat(), '2026-09-28T14:15:00+08:00')
 
     def test_country_aliases_and_full_bloomberg_tickers(self):
-        _, windows, start = self.windows()
+        _, windows, start = self.windows('2026-09-28T18:30:00+08:00')
         for alias, market in [('ID', 'IJ'), ('TH', 'TB'), ('PH', 'PM'), ('TW', 'TT'), ('CN', 'CH'), ('SG', 'SP'), ('MY', 'MK')]:
             with self.subTest(alias=alias):
                 applied, markets, resolved = record_window(dict(tickers=[f'TEST {alias} Equity']), dict(market_windows=windows), start)

@@ -14,7 +14,7 @@
     "The Codex plugin researches, translates and writes supported English summaries before passing them to the email formatter. The standalone collector does not perform AI analysis.",
     "Publisher feeds and current headline pages have finite depth. This does not cover every major news website, every article or the full 24-hour archive.",
     "Brave API search is optional and disabled. Bounded public exchange indexes are connected; paid news access, market-data calculations and email sending are not connected.",
-    "Default news windows begin at each market's latest completed desk close; verify holidays and special sessions. Explicit --hours selects a rolling window."
+    "Morning runs use each market's latest completed desk close; Monday morning includes Friday evening and the weekend. Weekday afternoon runs cover only news from that day's close to the run cutoff. A market still open is pending; a market with no session that day has no afternoon window. Neither carries previous-session or weekend news forward. Auto mode treats 12:00 Singapore onward on weekdays as afternoon; `timing_edition` can explicitly select `morning` or `afternoon`. Verify holidays and shortened sessions. Explicit `--hours` selects a rolling window."
   ],
   "discovery_mode": "market_first",
   "min_attention_score": 35,
@@ -362,5 +362,7 @@
   "inbox_file": "inbox.json",
   "topic": "",
   "monday_lookback_hours": 72,
-  "timing_mode": "market_close"
+  "timing_mode": "market_close",
+  "timing_edition": "auto",
+  "afternoon_start": "12:00"
 }

@@ -92,6 +92,7 @@ def validate_pack(pack):
     if market_mode and not market_windows:
         raise ValueError('Market-close timing requires market_windows from the collection or verified session calendar')
     starts = {}
+    statuses = {}
     for market, window in market_windows.items():
         code = windows.market_code(market)
         if code in starts or not isinstance(window, dict):
@@ -102,6 +103,10 @@ def validate_pack(pack):
         if window.get('as_of') and timestamp(window['as_of']) != as_of:
             raise ValueError('Market window cutoff differs from the edition cutoff')
         starts[code] = market_start
+        status = window.get('status', 'active')
+        if status not in ('active', 'pending_close', 'no_session'):
+            raise ValueError('Invalid market window status')
+        statuses[code] = status
     stories = result.get("stories", [])
     if not isinstance(stories, list) or not all(isinstance(story, dict) for story in stories):
         raise ValueError("stories must be a list of story objects")
@@ -116,6 +121,11 @@ def validate_pack(pack):
             else:
                 story_start = max(starts[m] for m in markets)
                 story['timing_markets'] = markets
+                for market in markets:
+                    if statuses[market] == 'pending_close':
+                        reasons.append(f'{market}: pending today\'s close; afternoon coverage cannot use an earlier session.')
+                    elif statuses[market] == 'no_session':
+                        reasons.append(f'{market}: no session today; no after-close window for this afternoon edition.')
         story['applied_window_start'] = story_start.isoformat()
         if not isinstance(story.get("id"), str) or not story["id"].strip():
             reasons.append("Story ID is missing.")
@@ -334,7 +344,13 @@ def review_page(pack, body, subject, attachment=None):
     held = [story for story in pack.get("stories", []) if story["composition_status"] == "hold"]
     market_table = ''
     if pack.get('market_windows'):
-        market_table = '<h2>News windows by market</h2><table><tr><th>Market</th><th>Start (inclusive)</th></tr>' + ''.join('<tr><td>' + esc(m) + '</td><td>' + esc(w['window_start']) + '</td></tr>' for m, w in pack['market_windows'].items()) + '</table><p>Each window ends at the edition cutoff. Check exchange holidays and special sessions against the research record.</p>'
+        def window_label(window):
+            if window.get('status') == 'pending_close':
+                return 'Pending today\'s close' + (': ' + window['expected_close'] if window.get('expected_close') else '')
+            if window.get('status') == 'no_session':
+                return 'No session today'
+            return window['window_start']
+        market_table = '<h2>News windows by market</h2><table><tr><th>Market</th><th>Start (inclusive) / status</th></tr>' + ''.join('<tr><td>' + esc(m) + '</td><td>' + esc(window_label(w)) + '</td></tr>' for m, w in pack['market_windows'].items()) + '</table><p>Each active window ends at the edition cutoff. Pending or closed-for-the-day markets have no eligible afternoon news window. Check exchange holidays and special sessions against the research record.</p>'
     output = ['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
               f'<title>{esc(subject)} — review</title><style>{STYLE}</style></head><body><main>',
               '<section class="notice"><h1>Review your morning email</h1><p>Codex researched and drafted this pack. '

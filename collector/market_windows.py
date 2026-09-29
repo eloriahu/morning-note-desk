@@ -59,6 +59,28 @@ def latest_close(asof, rule):
     raise ValueError('No completed market session within 370 days')
 
 
+def edition_for(config, asof):
+    """Weekday afternoons use only that day's session; mornings span overnight."""
+    edition = config.get('timing_edition', 'auto')
+    if edition not in ('auto', 'morning', 'afternoon'):
+        raise ValueError('timing_edition must be auto, morning or afternoon')
+    if edition == 'auto':
+        local = asof.astimezone(ZoneInfo(config.get('timezone', 'Asia/Singapore')))
+        boundary = time.fromisoformat(config.get('afternoon_start', '12:00'))
+        edition = 'afternoon' if local.weekday() < 5 and local.time() >= boundary else 'morning'
+    return edition
+
+
+def same_day_close(day, rule):
+    zone = ZoneInfo(rule['timezone'])
+    key = day.isoformat()
+    overrides = rule.get('sessions', {})
+    clock = overrides.get(key, rule['close'] if day.weekday() < 5 else None)
+    basis = 'session override' if key in overrides else rule.get('basis', 'normal weekday close')
+    cutoff = datetime.combine(day, time.fromisoformat(clock), zone) if clock else None
+    return cutoff, key, basis
+
+
 def build_windows(config, asof):
     if asof.tzinfo is None:
         raise ValueError('The edition cutoff requires a timezone')
@@ -73,14 +95,32 @@ def build_windows(config, asof):
         rules[code] = dict(rules.get(code, {}), **rule)
     output = {}
     display_zone = ZoneInfo(config.get('timezone', 'Asia/Singapore'))
+    edition = edition_for(config, asof)
     for market, rule in rules.items():
-        cutoff, day, basis = latest_close(asof, rule)
+        status = 'active'
+        expected_close = None
+        if edition == 'afternoon':
+            # The edition date stays fixed even after midnight in New Zealand.
+            cutoff, day, basis = same_day_close(asof.astimezone(display_zone).date(), rule)
+            if cutoff is None:
+                status = 'no_session'
+            elif cutoff > asof:
+                status = 'pending_close'
+                expected_close = cutoff.astimezone(display_zone).isoformat()
+            if status != 'active':
+                # Empty interval: status explicitly blocks even a release at as_of.
+                cutoff = asof
+        else:
+            cutoff, day, basis = latest_close(asof, rule)
         output[market] = dict(window_start=cutoff.astimezone(display_zone).isoformat(),
                               as_of=asof.isoformat(), session_date=day, basis=basis,
+                              status=status, edition=edition, expected_close=expected_close,
                               calendar_status='Normal weekdays plus configured session overrides; verify exchange holidays and special sessions.')
     earliest = min(datetime.fromisoformat(w['window_start']) for w in output.values())
     output['GLOBAL'] = dict(window_start=earliest.isoformat(), as_of=asof.isoformat(),
-                            basis='Regional macro context: earliest of the market windows')
+                            status='active' if any(w['status'] == 'active' for w in output.values()) else 'pending_close',
+                            edition=edition,
+                            basis='Regional macro context: earliest active market window; empty if none has closed')
     return output, earliest
 
 
@@ -107,5 +147,6 @@ def record_window(record, source, fallback, matched_tickers=()):
     valid = bool(markets) and all(m in windows for m in markets)
     if valid:
         # Multi-market candidates must meet each cutoff until research selects a primary market.
-        return max(datetime.fromisoformat(windows[m]['window_start']) for m in markets), markets, True
+        active = all(windows[m].get('status', 'active') == 'active' for m in markets)
+        return max(datetime.fromisoformat(windows[m]['window_start']) for m in markets), markets, active
     return fallback, markets, False

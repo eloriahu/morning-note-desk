@@ -97,6 +97,29 @@ class ComposerTests(unittest.TestCase):
             self.assertIn("Synthetic sourced statement", message.get_body(preferencelist=("plain",)).get_content())
             self.assertEqual({p.name for p in Path(temp).iterdir()}, {"email.html", "morning-note.txt", "morning-note.eml", "review.html", "research.json"})
 
+    def test_afternoon_holds_pending_markets_and_shows_status_in_editor(self):
+        asof = datetime.fromisoformat('2026-09-28T16:02:59+08:00')
+        windows, start = composer.windows.build_windows(dict(timing_mode='market_close'), asof)
+        pack = example_pack()
+        pack.update(timing_mode='market_close', market_windows=windows,
+                    window_start=start.isoformat(), as_of=asof.isoformat())
+        story = pack['stories'][0]
+        story['market'] = 'HK'
+        for published in ['2026-09-25T21:56:00+08:00', asof.isoformat()]:
+            story['sources'][0]['published_at'] = published
+            checked = composer.validate_pack(pack)
+            self.assertEqual(checked['composition']['ready_count'], 0)
+            self.assertIn('pending today', ' '.join(checked['stories'][0]['composition_reasons']))
+        with tempfile.TemporaryDirectory() as temp:
+            composer.compose(pack, temp)
+            review = (Path(temp) / 'review.html').read_text(encoding='utf-8')
+            self.assertIn('Pending today&#x27;s close: 2026-09-28T16:10:00+08:00', review)
+            self.assertNotIn('Synthetic sourced statement', (Path(temp) / 'email.html').read_text(encoding='utf-8'))
+        pack['market_windows']['HK']['status'] = 'no_session'
+        checked = composer.validate_pack(pack)
+        self.assertEqual(checked['composition']['ready_count'], 0)
+        self.assertIn('no session today', ' '.join(checked['stories'][0]['composition_reasons']))
+
     def test_background_and_unconfirmed_novelty_are_held_even_if_source_is_fresh(self):
         for novelty in ("background", "unconfirmed"):
             pack = example_pack()

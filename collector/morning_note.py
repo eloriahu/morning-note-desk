@@ -353,7 +353,9 @@ def classify_record(record, source, watchlist, start, asof, prior):
         return None, "previous_edition_unchanged"
     flags = []
     if not timing_resolved:
-        flags.append('Market timing is unresolved; identify the relevant market and apply its close before drafting.')
+        inactive = [m for m in timing_markets if source.get('market_windows', {}).get(m, {}).get('status', 'active') != 'active']
+        flags.append('No active after-close window today for: ' + ', '.join(inactive) + '.' if inactive else
+                     'Market timing is unresolved; identify the relevant market and apply its close before drafting.')
     flags.append("Newly found document or wording; material novelty versus known deal facts still requires review.")
     if broad:
         flags.append('Attention ranking is a provisional event-keyword screen; confirm relevance and identities against the source.')
@@ -935,7 +937,13 @@ def render(records, coverage, config, asof, out, historical=False):
     write_json(out / "draft-payload.json", payload)
     review = []
     if config.get('market_windows') and not historical:
-        review.append('<h3>News windows by market</h3><ul>' + ''.join(f'<li>{e(m)}: {e(w["window_start"])} to {e(asof.isoformat())}</li>' for m, w in config['market_windows'].items()) + '</ul><p>Normal weekday schedule with configured holiday/short-session overrides.</p>')
+        def window_label(window):
+            if window.get('status') == 'pending_close':
+                return 'Pending today\'s close' + (': ' + window['expected_close'] if window.get('expected_close') else '')
+            if window.get('status') == 'no_session':
+                return 'No session today'
+            return window['window_start'] + ' to ' + asof.isoformat()
+        review.append('<h3>News windows by market</h3><ul>' + ''.join(f'<li>{e(m)}: {e(window_label(w))}</li>' for m, w in config['market_windows'].items()) + '</ul><p>Normal weekday schedule with configured holiday/short-session overrides. Pending markets have no eligible afternoon news window.</p>')
     for c in coverage:
         counts = f'{c.get("discovered", 0)} headlines scanned · {c["articles_attempted"]} articles checked' if 'articles_attempted' in c else f'{c.get("discovered", 0)} source records checked'
         review.append(f'<div class="source"><strong>{e(c["name"])}</strong><span class="pill {e(c["status"])}">{e(c["status"])}</span><p>{c.get("matched", 0)} matches · {counts}</p>')

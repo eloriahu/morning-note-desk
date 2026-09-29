@@ -10,7 +10,7 @@ Save UTF-8 JSON with these fields:
 | `as_of` | Edition cutoff: full ISO timestamp with timezone, such as `2026-09-24T08:00:00+08:00`. |
 | `window_start` | Inclusive start of the research window, using the same full timestamp format. |
 | `timing_mode` | Use `market_close` for the default workflow, or `rolling_hours` for an explicit hours override. |
-| `market_windows` | In market-close mode, copy the verified per-market map from collection: each market has `window_start` and `as_of`, with optional session-date/basis notes. The top-level `window_start` is only the earliest collection envelope. See [market timing](market-windows.md). |
+| `market_windows` | In market-close mode, copy the verified per-market map from collection: each market has `window_start`, `as_of`, `status` (`active`, `pending_close` or `no_session`), `edition`, and session-date/basis notes. Preserve `expected_close` for pending markets. Inactive entries are empty windows and cannot supply email stories. The top-level `window_start` is only the earliest collection envelope. See [market timing](market-windows.md). |
 | `stories` | Array of researched story objects described below. Include held candidates as well as ready stories. |
 | `coverage` | Array of short, honest strings describing sources checked, failures, access limits and scope. A failed search cannot establish that there was no news. |
 | `priority_checks` | Optional JSON record of extra checks on the user's priority companies. These companies do not restrict broad discovery. |
