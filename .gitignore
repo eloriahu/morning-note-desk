@@ -9,6 +9,8 @@ morning-note-runs/
 research/
 sources/
 private/
+desk-instructions.md
+desk-rules.json
 *.eml
 house-style.json
 house-assets/
